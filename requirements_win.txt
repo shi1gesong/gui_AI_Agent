@@ -1,0 +1,8 @@
+pyautogui
+mss
+pynput
+opencv-python
+paddleocr
+easyocr
+pillow
+pyperclip
