@@ -26,9 +26,9 @@ gui_AI_Agent/
 
 | 周次 | 核心内容 | 详情 |
 |---|---|---|
-| 第1周 | 技术调研 + WSL2/Windows双环境搭建 | [week1/README.md](week1/README.md) |
-| 第2周 | 屏幕截图、OCR识别、鼠标键盘控制模块 | [week2/README.md](week2/README.md) |
-| 第3周 | 公开数据集处理、Planning-Acting-Reflecting Agent框架 | [week3/README.md](week3/README.md) |
+| 第1周 | 技术调研 + WSL2/Windows双环境搭建 | [report/week1_README.md](report/week1_README.md) |
+| 第2周 | 屏幕截图、OCR识别、鼠标键盘控制模块 | [report/week2_README.md](report/week2_README.md) |
+| 第3周 | 公开数据集处理、Planning-Acting-Reflecting Agent框架 | [report/week3_README.md](report/week3_README.md) |
 
 ## 技术栈
 
