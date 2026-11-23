@@ -1,0 +1,5 @@
+# 测试依赖（在 requirements_win.txt 基础上额外安装）
+pytest>=8
+langchain-core
+requests
+# Linux 下跑 Xvfb 真实 GUI 用例还需要系统包：xvfb、xclip、python3-tk

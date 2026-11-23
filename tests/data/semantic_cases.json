@@ -1,0 +1,22 @@
+[
+  {"id": "S01", "subtask": "打开默认浏览器", "screen": ["Google Chrome", "回收站", "此电脑", "设置"], "expect_type": ["click"], "expect_target": ["Google Chrome"]},
+  {"id": "S02", "subtask": "在浏览器地址栏输入天气预报", "screen": ["地址栏", "新标签页", "书签"], "expect_type": ["type"], "expect_target": ["地址栏"], "expect_input": "天气预报"},
+  {"id": "S03", "subtask": "按回车键确认搜索", "screen": ["地址栏", "天气预报"], "expect_type": ["key"], "expect_input_any": ["enter", "回车", "Enter", "return"]},
+  {"id": "S04", "subtask": "向下滚动页面查看更多结果", "screen": ["搜索结果", "下一页"], "expect_type": ["scroll"]},
+  {"id": "S05", "subtask": "点击“设置”按钮", "screen": ["搜索", "设置", "帮助"], "expect_type": ["click"], "expect_target": ["设置"]},
+  {"id": "S06", "subtask": "打开记事本", "screen": ["记事本", "画图", "计算器"], "expect_type": ["click"], "expect_target": ["记事本"]},
+  {"id": "S07", "subtask": "在记事本中输入Hello GUI Agent", "screen": ["文件", "编辑", "格式", "文本编辑区"], "expect_type": ["type"], "expect_input": "Hello GUI Agent"},
+  {"id": "S08", "subtask": "点击“文件”菜单", "screen": ["文件", "编辑", "查看"], "expect_type": ["click"], "expect_target": ["文件"]},
+  {"id": "S09", "subtask": "点击“另存为”", "screen": ["新建", "打开", "保存", "另存为"], "expect_type": ["click"], "expect_target": ["另存为"]},
+  {"id": "S10", "subtask": "在文件名输入框输入report.txt", "screen": ["文件名", "保存类型", "保存", "取消"], "expect_type": ["type"], "expect_target": ["文件名"], "expect_input": "report.txt"},
+  {"id": "S11", "subtask": "点击“保存”按钮", "screen": ["文件名", "保存", "取消"], "expect_type": ["click"], "expect_target": ["保存"]},
+  {"id": "S12", "subtask": "在微信搜索框输入张三", "screen": ["搜索", "聊天", "通讯录"], "expect_type": ["type"], "expect_target": ["搜索"], "expect_input": "张三"},
+  {"id": "S13", "subtask": "点击联系人张三", "screen": ["张三", "李四", "文件传输助手"], "expect_type": ["click"], "expect_target": ["张三"]},
+  {"id": "S14", "subtask": "在消息输入框输入：今晚开会", "screen": ["张三", "消息输入框", "发送"], "expect_type": ["type"], "expect_input": "今晚开会"},
+  {"id": "S15", "subtask": "点击“发送”按钮", "screen": ["消息输入框", "发送"], "expect_type": ["click"], "expect_target": ["发送"]},
+  {"id": "S16", "subtask": "按Tab键切换到下一个输入框", "screen": ["用户名", "密码", "登录"], "expect_type": ["key"], "expect_input_any": ["tab", "Tab", "TAB"]},
+  {"id": "S17", "subtask": "在用户名输入框输入admin", "screen": ["用户名", "密码", "登录"], "expect_type": ["type"], "expect_target": ["用户名"], "expect_input": "admin"},
+  {"id": "S18", "subtask": "点击“登录”按钮", "screen": ["用户名", "密码", "登录", "忘记密码"], "expect_type": ["click"], "expect_target": ["登录"]},
+  {"id": "S19", "subtask": "向上滚动回到页面顶部", "screen": ["返回顶部", "评论区"], "expect_type": ["scroll", "click"], "expect_target_if_click": ["返回顶部"]},
+  {"id": "S20", "subtask": "点击第一条搜索结果", "screen": ["天气预报 - 中国天气网", "北京天气_百度", "下一页"], "expect_type": ["click"], "expect_target": ["天气预报 - 中国天气网"]}
+]
