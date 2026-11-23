@@ -72,7 +72,9 @@ class TestAgentFunctional:
     def test_act_records_history(self):
         agent, _ = make_agent([ACT_CLICK])
         agent.act("点击搜索", SCREEN)
-        assert agent.action_history == [{"subtask": "点击搜索", "action": json.loads(ACT_CLICK)}]
+        h = agent.action_history
+        assert len(h) == 1 and h[0]["subtask"] == "点击搜索" and h[0]["action"] == json.loads(ACT_CLICK)
+        assert h[0]["attempts"] == 1 and h[0]["executed"] is False
 
     def test_type_action_with_chinese_input(self):
         agent, _ = make_agent([J({"action_type": "type", "target_text": "搜索框", "input_text": "天气预报"})])
@@ -86,7 +88,36 @@ class TestAgentFunctional:
 
     def test_reflect_returns_dict(self):
         agent, _ = make_agent([REFLECT_OK])
-        assert agent.reflect("x")["is_complete"] is True
+        r = agent.reflect("x")
+        assert isinstance(r, dict) and r["reason"] == "done"
+
+    def test_reflect_keeps_llm_true_when_all_executed(self):
+        agent, _ = make_agent([J({"subtasks": ["点击搜索"]}), ACT_CLICK, REFLECT_OK])
+        agent.executor = lambda action, elements: {"ok": True}
+        res = agent.run("搜索", lambda: SCREEN)
+        assert res["reflection"]["is_complete"] is True and res["action_history"][0]["executed"] is True
+
+    def test_executor_receives_action_and_elements(self):
+        agent, _ = make_agent([J({"subtasks": ["点击搜索"]}), ACT_CLICK, REFLECT_OK])
+        seen = []
+        agent.executor = lambda action, elements: seen.append((action, elements)) or {"ok": True}
+        agent.run("搜索", lambda: SCREEN)
+        assert seen[0][0]["target_text"] == "搜索" and [e["text"] for e in seen[0][1]] == ["搜索", "设置"]
+
+    def test_retry_with_feedback_then_success(self):
+        bad = J({"action_type": "click", "target_text": "设置", "input_text": ""})
+        good = J({"action_type": "type", "target_text": "搜索", "input_text": "天气预报"})
+        agent, fake = make_agent([bad, good])
+        action = agent.act("在搜索框输入天气预报", SCREEN)
+        assert action["action_type"] == "type" and agent.action_history[0]["attempts"] == 2
+        assert "不合格" in fake.prompts[1] and "不合格" not in fake.prompts[0]
+        assert action["_rejected"][0]["output"]["target_text"] == "设置"
+
+    def test_acting_prompt_example_no_longer_settings(self):
+        """第3周 Prompt 的示例就是点击“设置”，模型把“打开浏览器”照抄成了点击“设置”"""
+        agent, fake = make_agent([ACT_CLICK])
+        agent.act("点击搜索", SCREEN)
+        assert '"target_text": "设置"' not in fake.prompts[0]
 
     def test_run_full_loop_call_count(self):
         agent, fake = make_agent([J({"subtasks": ["a", "b"]}), ACT_CLICK, ACT_CLICK, REFLECT_OK])
@@ -158,8 +189,9 @@ class TestAgentBoundary:
 
     def test_reflect_with_empty_history(self):
         agent, fake = make_agent([REFLECT_OK])
-        agent.reflect("x")
-        assert "已执行的子任务与动作记录：\n\n" in fake.prompts[0]
+        r = agent.reflect("x")
+        assert "动作记录（含是否真正执行成功）：\n\n" in fake.prompts[0]
+        assert r["is_complete"] is False and r["llm_is_complete"] is True
 
     def test_parse_empty_string(self):
         agent, _ = make_agent([])
@@ -181,7 +213,7 @@ class TestAgentBoundary:
     def test_screen_context_with_braces_in_prompt(self):
         """screen_context 本身含 { } 时 PromptTemplate.format 不应报错"""
         agent, fake = make_agent([ACT_CLICK])
-        agent.act("点击", "{'text': '确定'} {{双括号}}")
+        agent.act("点击", "{'text': '搜索'} {{双括号}}")
         assert "{{双括号}}" in fake.prompts[0]
 
     def test_very_long_screen_context(self):
@@ -189,18 +221,15 @@ class TestAgentBoundary:
         agent.act("点击", "元素," * 20000)
         assert len(fake.prompts[0]) > 60000
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：qwen3 输出的 <think> 段里含 { 时，JSON 提取从错误位置开始，导致解析失败")
     def test_parse_qwen3_think_block_with_braces(self):
         agent, _ = make_agent([])
         raw = '<think>用户要我输出 {"subtasks": ...} 格式</think>\n{"subtasks": ["打开浏览器"]}'
         assert agent._safe_json_parse(raw) == {"subtasks": ["打开浏览器"]}
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：LLM 返回多个 JSON 对象时 find/rfind 截取到中间文本，解析失败")
     def test_parse_two_json_objects_takes_first(self):
         agent, _ = make_agent([])
         assert agent._safe_json_parse('{"a": 1}\n{"b": 2}') == {"a": 1}
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：多次调用 run() 时 action_history 不清空，上一轮动作混入新任务的 Reflect")
     def test_run_twice_history_isolated(self):
         agent, _ = make_agent([J({"subtasks": ["a"]}), ACT_CLICK, REFLECT_OK,
                                J({"subtasks": ["b"]}), ACT_CLICK, REFLECT_OK])
@@ -208,17 +237,33 @@ class TestAgentBoundary:
         res = agent.run("任务2", lambda: SCREEN)
         assert len(res["action_history"]) == 1
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：action_type 不在 click/type/scroll/key 中时没有校验（第3周 Prompt 修复前出现过 'click/type'）")
     def test_act_rejects_invalid_action_type(self):
-        agent, _ = make_agent([J({"action_type": "click/type", "target_text": "搜索", "input_text": ""})])
+        agent, _ = make_agent([J({"action_type": "click/type", "target_text": "搜索", "input_text": ""})] * 3)
         action = agent.act("点击搜索", SCREEN)
-        assert action.get("action_type") in {"click", "type", "scroll", "key"} or action.get("_invalid")
+        assert action.get("_invalid") and "action_type" in action["_reasons"][0]
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：没有校验 target_text 是否真的出现在屏幕元素中（无 grounding），模型编造的目标会被直接接受")
     def test_act_rejects_target_not_on_screen(self):
-        agent, _ = make_agent([J({"action_type": "click", "target_text": "Chrome", "input_text": ""})])
+        agent, _ = make_agent([J({"action_type": "click", "target_text": "Chrome", "input_text": ""})] * 3)
         action = agent.act("打开浏览器", SCREEN)
-        assert action.get("_invalid") or action.get("target_text") in ("搜索", "设置")
+        assert action["_fallback"] and action["action_type"] == "key" and action["input_text"] == "win"
+        assert action["follow_up"][0] == {"action_type": "type", "target_text": "", "input_text": "浏览器"}
+
+    def test_max_retries_zero_no_retry(self):
+        agent, fake = make_agent([J({"action_type": "click", "target_text": "不存在", "input_text": ""})])
+        agent.max_retries = 0
+        assert agent.act("点击按钮", SCREEN)["_invalid"] is True and len(fake.prompts) == 1
+
+    def test_act_list_response_takes_first(self):
+        agent, _ = make_agent([J([json.loads(ACT_CLICK), {"action_type": "key"}])])
+        assert agent.act("点击搜索", SCREEN)["target_text"] == "搜索"
+
+    def test_parse_only_closing_think_tag(self):
+        agent, _ = make_agent([])
+        assert agent._safe_json_parse('思考 {x}</think>{"a": 2}') == {"a": 2}
+
+    def test_plan_filters_empty_and_non_string(self):
+        agent, _ = make_agent([J({"subtasks": ["打开", "", "  ", None, {"x": 1}, "搜索"]})])
+        assert agent.plan("x") == ["打开", "搜索"]
 
 
 @pytest.mark.exception
@@ -251,29 +296,45 @@ class TestAgentException:
         assert agent.plan("x") == []
 
     def test_garbage_act_marked_parse_error(self):
-        agent, _ = make_agent(["我觉得应该点击搜索按钮"])
-        assert agent.act("点击搜索", SCREEN)["_parse_error"] is True
+        agent, fake = make_agent(["我觉得应该点击搜索按钮"] * 3)
+        action = agent.act("点击搜索", SCREEN)
+        assert action["_parse_error"] is True and action["_invalid"] is True and len(fake.prompts) == 3
+
+    def test_executor_failure_recorded_and_reflect_false(self):
+        agent, _ = make_agent([J({"subtasks": ["点击搜索"]}), ACT_CLICK, REFLECT_OK])
+        agent.executor = lambda action, elements: {"ok": False, "error": "LookupError"}
+        res = agent.run("搜索", lambda: SCREEN)
+        assert res["action_history"][0]["error"] == "LookupError"
+        assert res["reflection"]["is_complete"] is False
+
+    def test_invalid_action_not_sent_to_executor(self):
+        agent, _ = make_agent([J({"subtasks": ["点击按钮"]})] + ["胡言乱语"] * 3 + [REFLECT_OK])
+        calls = []
+        agent.executor = lambda a, e: calls.append(a) or {"ok": True}
+        agent.run("x", lambda: SCREEN)
+        assert calls == []
+
+    def test_reflect_garbage_forced_incomplete(self):
+        agent, _ = make_agent([J({"subtasks": ["点击搜索"]}), ACT_CLICK, "完成了"])
+        agent.executor = lambda a, e: {"ok": True}
+        assert agent.run("x", lambda: SCREEN)["reflection"]["is_complete"] is False
 
     def test_garbage_reflect_marked_parse_error(self):
         agent, _ = make_agent(["任务完成了"])
         assert agent.reflect("x")["_parse_error"] is True
 
     def test_truncated_json_marked_parse_error(self):
-        agent, _ = make_agent(['{"action_type": "click", "target_text": "搜'])
+        agent, _ = make_agent(['{"action_type": "click", "target_text": "搜'] * 3)
         assert agent.act("点击", SCREEN)["_parse_error"] is True
 
-    @pytest.mark.xfail(strict=True, raises=AttributeError,
-                       reason="已知问题：LLM 直接返回 JSON 数组时 plan() 调用 list.get 崩溃")
     def test_plan_json_array_response(self):
         agent, _ = make_agent([J(["打开浏览器", "搜索"])])
         assert agent.plan("x") == ["打开浏览器", "搜索"]
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：subtasks 为字符串时未校验类型，run() 会把每个字符当成一个子任务")
     def test_plan_subtasks_string_rejected(self):
         agent, _ = make_agent([J({"subtasks": "打开浏览器"})])
-        assert isinstance(agent.plan("x"), list)
+        assert agent.plan("x") == ["打开浏览器"]
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：base_agent 使用 `from llm_interface import`，以包方式 import agent.base_agent 会失败")
     def test_import_as_package(self, tmp_path):
         from conftest import REPO_ROOT
         code = "import sys; sys.path.insert(0, %r); import agent.base_agent" % str(REPO_ROOT)

@@ -30,6 +30,12 @@ class FakeResp:
         return self._payload
 
 
+@pytest.fixture(autouse=True)
+def clean_env(monkeypatch):
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+
+
 @pytest.fixture
 def post(monkeypatch):
     calls = []
@@ -173,15 +179,27 @@ class TestLLMBoundary:
         assert "images" not in post.calls[0]["json"]
 
     def test_base_url_trailing_slash(self, post):
-        """尾部带 / 时会拼出 //api/generate —— 记录当前行为，Ollama 通常能容忍"""
         OllamaAPIInterface(base_url="http://h:1/").generate("x")
-        assert post.calls[0]["url"] == "http://h:1//api/generate"
+        assert post.calls[0]["url"] == "http://h:1/api/generate"
+
+    def test_base_url_without_scheme_and_port(self):
+        assert OllamaAPIInterface(base_url="172.20.192.1").base_url == "http://172.20.192.1:11434"
+
+    def test_ollama_host_bind_all_maps_to_localhost(self, monkeypatch):
+        """Windows 端为让 WSL2 访问会设 OLLAMA_HOST=0.0.0.0（服务端监听地址），客户端不能直接连 0.0.0.0"""
+        monkeypatch.setenv("OLLAMA_HOST", "0.0.0.0")
+        assert OllamaAPIInterface().base_url == "http://localhost:11434"
+
+    def test_base_url_env_priority(self, monkeypatch):
+        monkeypatch.setenv("OLLAMA_HOST", "http://a:1")
+        monkeypatch.setenv("OLLAMA_BASE_URL", "http://b:2")
+        assert OllamaAPIInterface().base_url == "http://b:2"
+        assert OllamaAPIInterface(base_url="http://c:3").base_url == "http://c:3"
 
     def test_response_with_think_tags_returned_verbatim(self, post):
         post.resp = FakeResp({"response": "<think>思考</think>{\"a\":1}"})
         assert OllamaAPIInterface().generate("x").startswith("<think>")
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：Ollama 默认地址为 localhost，在 WSL2 中无法访问 Windows 端服务（第3周报告），且不读取 OLLAMA_HOST 环境变量")
     def test_base_url_reads_env(self, monkeypatch):
         monkeypatch.setenv("OLLAMA_HOST", "http://172.20.192.1:11434")
         assert OllamaAPIInterface().base_url == "http://172.20.192.1:11434"

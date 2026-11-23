@@ -83,6 +83,33 @@ def make_webarena(root, files):
     return cfg
 
 
+def sa_item(**over):
+    item = {
+        "session_id": None, "task_prompt": "上网查找冯诺依曼的相关资料", "task_prompt_zh": "上网查找冯诺依曼的相关资料",
+        "task_prompt_en": "Find relevant information about von Neumann on the Internet",
+        "video_width": 1024, "video_height": 768, "saved_image_name": "2024.jpg",
+        "actions": [
+            {"action_type": "MouseAction", "mouse_action_type": "click", "mouse_button": "left",
+             "mouse_position": {"width": 512, "height": 384}},
+            {"action_type": "KeyboardAction", "keyboard_action_type": "text", "keyboard_text": "冯诺依曼"},
+            {"action_type": "KeyboardAction", "keyboard_action_type": "press", "keyboard_key": ["Return"]},
+        ],
+    }
+    item.update(over)
+    if item["session_id"] is None:
+        del item["session_id"]
+    return item
+
+
+def make_screenagent(root, files):
+    base = root / "ScreenAgent" / "data" / "ScreenAgent"
+    for rel, content in files.items():
+        p = base / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content if isinstance(content, str) else json.dumps(content, ensure_ascii=False), encoding="utf-8")
+    return base
+
+
 def read_jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
@@ -139,6 +166,37 @@ class TestDatasetFunctional:
         make_webarena(root, {f"examples/{i}.json": {"task_id": i, "intent": f"t{i}"} for i in range(4)})
         dl.preprocess_webarena_tasks()
         assert len(read_jsonl(root / "webarena_processed.jsonl")) == 4
+
+    def test_screenagent_unified_fields(self, dl, root):
+        make_screenagent(root, {"train/sess1/2024_translate.json": sa_item()})
+        s = dl.preprocess_screenagent()[0]
+        assert s["task_id"] == "sess1/2024_translate" and s["source"] == "screenagent"
+        assert s["instruction"] == "上网查找冯诺依曼的相关资料" and s["instruction_en"].startswith("Find")
+        assert s["split"] == "train" and s["screen_size"] == [1024, 768]
+        assert s["screenshot_path"].endswith("images/2024.jpg")
+
+    def test_screenagent_action_conversion(self, dl, root):
+        make_screenagent(root, {"train/s/a.json": sa_item()})
+        acts = dl.preprocess_screenagent()[0]["action_sequence"]
+        assert acts[0] == {"action_type": "click", "button": "left", "x": 512, "y": 384, "x_ratio": 0.5, "y_ratio": 0.5}
+        assert acts[1] == {"action_type": "type", "text": "冯诺依曼"}
+        assert acts[2] == {"action_type": "key", "keys": ["Return"]}
+
+    def test_screenagent_scroll_drag_wait(self, dl, root):
+        make_screenagent(root, {"train/s/a.json": sa_item(actions=[
+            {"action_type": "MouseAction", "mouse_action_type": "scroll_down", "scroll_repeat": 25},
+            {"action_type": "MouseAction", "mouse_action_type": "scroll_up", "scroll_repeat": 3},
+            {"action_type": "MouseAction", "mouse_action_type": "drag", "mouse_button": "left",
+             "mouse_position": {"width": 100, "height": 200}},
+            {"action_type": "WaitAction", "wait_time": 2}])})
+        acts = dl.preprocess_screenagent()[0]["action_sequence"]
+        assert [a["action_type"] for a in acts] == ["scroll", "scroll", "drag", "wait"]
+        assert acts[0]["amount"] == -25 and acts[1]["amount"] == 3 and acts[3]["seconds"] == 2
+
+    def test_screenagent_writes_jsonl(self, dl, root):
+        make_screenagent(root, {f"train/s/{i}.json": sa_item() for i in range(3)})
+        dl.preprocess_screenagent()
+        assert len(read_jsonl(root / "screenagent_processed.jsonl")) == 3
 
     def test_clone_screenagent_command(self, dl, root, git):
         target = dl.clone_screenagent_dataset()
@@ -231,16 +289,41 @@ class TestDatasetBoundary:
         make_webarena(root, {"README.md": "# x", "examples/1.json": {"task_id": 1, "intent": "x"}})
         assert len(dl.preprocess_webarena_tasks()) == 1
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：dataset_loader 在 import 时就在当前工作目录创建 data_cache/（模块级副作用）")
     def test_import_has_no_side_effect(self, tmp_path):
         from conftest import REPO_ROOT
         code = "import sys; sys.path.insert(0, %r); import data.dataset_loader" % str(REPO_ROOT)
         subprocess.run([sys.executable, "-c", code], cwd=tmp_path, check=True)
         assert not (tmp_path / "data_cache").exists()
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：ScreenAgent 仅克隆仓库，没有实现数据解析，无法产出统一格式样本")
     def test_screenagent_preprocess_exists(self, dl):
-        assert hasattr(dl, "preprocess_screenagent")
+        assert callable(getattr(dl, "preprocess_screenagent", None))
+
+    def test_screenagent_missing_repo(self, dl, root):
+        assert dl.preprocess_screenagent() == []
+
+    def test_screenagent_skips_negative_samples(self, dl, root):
+        make_screenagent(root, {"train/s1/a_neg_plan.json": sa_item(), "train/s1/b_neg_eval.json": sa_item(),
+                                "train/s1/c_translate.json": sa_item()})
+        assert [s["task_id"] for s in dl.preprocess_screenagent()] == ["s1/c_translate"]
+
+    def test_screenagent_include_negative(self, dl, root):
+        make_screenagent(root, {"train/s1/a_neg_plan.json": sa_item(), "train/s1/c_translate.json": sa_item()})
+        assert len(dl.preprocess_screenagent(include_negative=True)) == 2
+
+    def test_screenagent_plan_only_sample_skipped(self, dl, root):
+        make_screenagent(root, {"train/s1/p.json": sa_item(actions=[{"action_type": "PlanAction", "element": "x"}])})
+        assert dl.preprocess_screenagent() == []
+
+    def test_screenagent_missing_image_name(self, dl, root):
+        item = sa_item()
+        del item["saved_image_name"]
+        make_screenagent(root, {"train/s1/a.json": item})
+        assert dl.preprocess_screenagent()[0]["screenshot_path"] is None
+
+    def test_screenagent_zero_screen_size_ratio_none(self, dl, root):
+        make_screenagent(root, {"train/s1/a.json": sa_item(video_width=0, video_height=0)})
+        a = dl.preprocess_screenagent()[0]["action_sequence"][0]
+        assert a["x"] == 512 and "x_ratio" not in a
 
 
 @pytest.mark.exception
@@ -273,6 +356,20 @@ class TestDatasetException:
     def test_webarena_non_utf8_skipped(self, dl, root):
         make_webarena(root, {"examples/gbk.json": '{"intent": "中文"}'.encode("gbk")})
         assert dl.preprocess_webarena_tasks() == []
+
+    def test_screenagent_malformed_json_skipped(self, dl, root):
+        make_screenagent(root, {"train/s1/bad.json": "{oops", "train/s1/ok.json": sa_item()})
+        assert len(dl.preprocess_screenagent()) == 1
+
+    def test_screenagent_json_list_skipped(self, dl, root):
+        make_screenagent(root, {"train/s1/list.json": [1, 2]})
+        assert dl.preprocess_screenagent() == []
+
+    def test_screenagent_unknown_mouse_type_dropped(self, dl, root):
+        make_screenagent(root, {"train/s1/a.json": sa_item(actions=[
+            {"action_type": "MouseAction", "mouse_action_type": "triple_click"},
+            {"action_type": "KeyboardAction", "keyboard_action_type": "text", "keyboard_text": "hi"}])})
+        assert [a["action_type"] for a in dl.preprocess_screenagent()[0]["action_sequence"]] == ["type"]
 
     def test_clone_failure_returns_none(self, dl, root, git):
         git.returncode, git.stderr = 128, "fatal: unable to access"

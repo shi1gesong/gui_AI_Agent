@@ -84,16 +84,14 @@ def test_real_region_last_pixel(tmp_path):
 
 @pytest.mark.exception
 def test_real_region_outside_screen_raises(tmp_path):
-    """区域超出屏幕时 X11 下 mss 抛 ScreenShotError；ScreenCapture 没有预先校验/裁剪（记录现状）"""
-    import mss.exception
+    """区域超出屏幕：修复前 X11 下由 mss 抛 ScreenShotError、Windows 下截出黑边；现在统一预先报 ValueError"""
     with virtual_display("1280x720"):
-        with pytest.raises(mss.exception.ScreenShotError):
+        with pytest.raises(ValueError):
             _capture(tmp_path).capture_region(1200, 700, 200, 100, save=False)
 
 
 @pytest.mark.exception
 def test_real_region_zero_size_raises(tmp_path):
-    import mss.exception
     with virtual_display("1280x720"):
-        with pytest.raises(mss.exception.ScreenShotError):
+        with pytest.raises(ValueError):
             _capture(tmp_path).capture_region(0, 0, 0, 10, save=False)

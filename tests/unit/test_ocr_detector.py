@@ -228,6 +228,10 @@ class TestOCRBoundary:
     def test_find_latest_empty_dir(self, tmp_path):
         assert find_latest_screenshot(str(tmp_path)) is None
 
+    def test_find_latest_only_annotated_returns_none(self, tmp_path):
+        (tmp_path / "annotated_easyocr.png").write_bytes(b"x")
+        assert find_latest_screenshot(str(tmp_path)) is None
+
     def test_find_latest_ignores_non_png(self, tmp_path):
         (tmp_path / "a.jpg").write_bytes(b"x")
         assert find_latest_screenshot(str(tmp_path)) is None
@@ -236,7 +240,6 @@ class TestOCRBoundary:
         rep = benchmark_engines(image_file)
         assert rep["easyocr"]["avg_confidence"] == 0 and rep["easyocr"]["detected_count"] == 0
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：find_latest_screenshot 会选中 annotated_*.png 标注图（第2周报告已记录）")
     def test_find_latest_skips_annotated_images(self, tmp_path):
         raw, ann = tmp_path / "screenshot_1.png", tmp_path / "annotated_easyocr.png"
         raw.write_bytes(b"1")

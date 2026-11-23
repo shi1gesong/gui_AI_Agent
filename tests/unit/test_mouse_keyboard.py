@@ -86,20 +86,29 @@ class TestControlFunctional:
 
     def test_type_unicode_chinese_via_clipboard(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text_unicode("天气预报")
-        assert fake_clipboard.history == ["天气预报"]
+        assert fake_clipboard.history[0] == "天气预报"
         assert fake_gui.calls[-1] == ("hotkey", ("ctrl", "v"), {})
 
     def test_type_unicode_mixed_text(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text_unicode("北京 weather 2026")
-        assert fake_clipboard.content == "北京 weather 2026"
+        assert fake_clipboard.history[0] == "北京 weather 2026"
 
     def test_type_unicode_emoji_and_symbols(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text_unicode("✅ 测试通过！😀")
-        assert fake_clipboard.content == "✅ 测试通过！😀"
+        assert fake_clipboard.history[0] == "✅ 测试通过！😀"
 
     def test_type_unicode_japanese_korean(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text_unicode("こんにちは 안녕하세요")
-        assert fake_clipboard.content == "こんにちは 안녕하세요"
+        assert fake_clipboard.history[0] == "こんにちは 안녕하세요"
+
+    def test_type_text_routes_chinese_to_clipboard(self, ctl, fake_gui, fake_clipboard):
+        ctl.type_text("搜索天气")
+        assert fake_clipboard.history[0] == "搜索天气"
+        assert "typewrite" not in fake_gui.names()
+
+    def test_type_text_ascii_does_not_touch_clipboard(self, ctl, fake_gui, fake_clipboard):
+        ctl.type_text("hello")
+        assert fake_clipboard.history == []
 
     @pytest.mark.parametrize("key", ["enter", "esc", "tab", "backspace", "f5", "win"])
     def test_press_key(self, ctl, fake_gui, key):
@@ -129,13 +138,21 @@ class TestControlFunctional:
 
 @pytest.mark.boundary
 class TestControlBoundary:
-    def test_click_origin_passed_through(self, ctl, fake_gui):
-        ctl.click(0, 0)
-        assert fake_gui.calls[-1][2]["x"] == 0
+    @pytest.mark.parametrize("pt,expected", [((0, 0), (1, 1)), ((1919, 0), (1918, 1)),
+                                             ((0, 1079), (1, 1078)), ((1919, 1079), (1918, 1078))],
+                             ids=["top_left", "top_right", "bottom_left", "bottom_right"])
+    def test_corner_pixel_nudged_inward(self, ctl, fake_gui, pt, expected):
+        """四角像素会触发 pyautogui FAILSAFE，目标坐标落在角点时向内偏移 1 像素"""
+        ctl.click(*pt)
+        assert (fake_gui.calls[-1][2]["x"], fake_gui.calls[-1][2]["y"]) == expected
 
-    def test_click_bottom_right_pixel(self, ctl, fake_gui):
-        ctl.click(1919, 1079)
-        assert (fake_gui.calls[-1][2]["x"], fake_gui.calls[-1][2]["y"]) == (1919, 1079)
+    def test_edge_non_corner_not_nudged(self, ctl, fake_gui):
+        ctl.click(0, 500)
+        assert (fake_gui.calls[-1][2]["x"], fake_gui.calls[-1][2]["y"]) == (0, 500)
+
+    def test_drag_to_corner_nudged(self, ctl, fake_gui):
+        ctl.drag_to(100, 100, 1919, 1079)
+        assert fake_gui.calls[-1][1] == (1918, 1078)
 
     def test_scroll_zero(self, ctl, fake_gui):
         ctl.scroll(0)
@@ -168,36 +185,46 @@ class TestControlBoundary:
 
     def test_type_unicode_empty_string(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text_unicode("")
-        assert fake_clipboard.content == ""
+        assert fake_clipboard.history[0] == ""
 
     def test_type_long_text_10k_chars(self, ctl, fake_gui, fake_clipboard):
         text = "长文本" * 3334
         ctl.type_text_unicode(text)
-        assert len(fake_clipboard.content) == 10002
+        assert len(fake_clipboard.history[0]) == 10002
 
     def test_type_multiline_text(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text_unicode("第一行\n第二行\t制表")
-        assert fake_clipboard.content == "第一行\n第二行\t制表"
+        assert fake_clipboard.history[0] == "第一行\n第二行\t制表"
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：type_text 直接调用 typewrite，中文会被静默丢弃；未自动切换到剪贴板方案")
     def test_type_text_auto_routes_non_ascii_to_clipboard(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text("搜索天气")
-        assert fake_clipboard.content == "搜索天气"
+        assert fake_clipboard.history[0] == "搜索天气" and fake_clipboard.content == "原剪贴板内容"
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：中文输入后没有恢复用户原来的剪贴板内容")
     def test_type_unicode_restores_clipboard(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text_unicode("临时内容")
         assert fake_clipboard.content == "原剪贴板内容"
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：坐标没有做屏幕范围校验，越界坐标被直接交给 pyautogui")
     def test_click_outside_screen_rejected(self, ctl, fake_gui):
         with pytest.raises(ValueError):
             ctl.click(5000, 5000)
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：负坐标未校验")
     def test_click_negative_coordinate_rejected(self, ctl, fake_gui):
         with pytest.raises(ValueError):
             ctl.click(-1, 100)
+        assert fake_gui.calls == []
+
+    def test_coordinate_equal_to_width_rejected(self, ctl, fake_gui):
+        with pytest.raises(ValueError):
+            ctl.move_to(1920, 10)
+
+    def test_scroll_position_out_of_screen_rejected(self, ctl, fake_gui):
+        with pytest.raises(ValueError):
+            ctl.scroll(-3, x=100, y=5000)
+
+    def test_drag_end_out_of_screen_rejected_before_moving(self, ctl, fake_gui):
+        with pytest.raises(ValueError):
+            ctl.drag_to(10, 10, 3000, 10)
+        assert fake_gui.calls == []
 
 
 @pytest.mark.exception
@@ -245,10 +272,27 @@ class TestControlException:
         with pytest.raises(KeyError):
             ctl.press_key("not_a_key")
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：type_text 对非 ASCII 字符既不报错也不输入（静默失败）")
-    def test_type_text_non_ascii_raises_or_warns(self, ctl, fake_gui):
-        with pytest.raises((ValueError, UnicodeError)):
-            ctl.type_text("中文")
+    def test_type_text_non_ascii_not_silently_dropped(self, ctl, fake_gui, fake_clipboard):
+        ctl.type_text("中文")
+        assert ("hotkey", ("ctrl", "v"), {}) in fake_gui.calls
+
+    def test_unknown_key_rejected(self, ctl, fake_gui):
+        fake_gui.KEYBOARD_KEYS = ["enter", "ctrl", "a"]
+        with pytest.raises(ValueError, match="未知按键名"):
+            ctl.press_key("entr")
+        assert fake_gui.calls == []
+
+    def test_unknown_key_in_hotkey_rejected(self, ctl, fake_gui):
+        fake_gui.KEYBOARD_KEYS = ["enter", "ctrl", "a"]
+        with pytest.raises(ValueError):
+            ctl.hotkey("ctrl", "shfit")
+
+    def test_clipboard_read_failure_still_types(self, ctl, fake_gui, fake_clipboard):
+        def broken_paste():
+            raise RuntimeError("clipboard busy")
+        fake_clipboard.paste = broken_paste
+        ctl.type_text_unicode("中文")
+        assert fake_clipboard.history == ["中文"] and fake_gui.names() == ["hotkey"]
 
 
 @pytest.mark.multi_resolution

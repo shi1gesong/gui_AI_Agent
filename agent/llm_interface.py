@@ -7,6 +7,7 @@
 设计目标：上层Agent框架不关心具体用哪种模型，统一调用 generate() 方法
 """
 import base64
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
@@ -50,11 +51,28 @@ class LocalQwenVLInterface(BaseLLMInterface):
 class OllamaAPIInterface(BaseLLMInterface):
     """
     通过 Ollama 本地API调用模型（复用你在Microsoft实习medical-rag项目里已经跑通的Ollama服务）
-    默认假设Ollama服务跑在本机 http://localhost:11434
+
+    服务地址优先级：参数 base_url > 环境变量 OLLAMA_BASE_URL > 环境变量 OLLAMA_HOST > http://localhost:11434
+    WSL2 中访问 Windows 端 Ollama 时，设置 OLLAMA_BASE_URL=http://<ip route 得到的网关IP>:11434 即可，无需改代码。
     """
-    def __init__(self, model_name: str = "qwen3:8b", base_url: str = "http://localhost:11434"):
+    DEFAULT_URL = "http://localhost:11434"
+
+    def __init__(self, model_name: str = "qwen3:8b", base_url: Optional[str] = None):
         self.model_name = model_name
-        self.base_url = base_url
+        self.base_url = self._resolve_base_url(base_url)
+
+    @classmethod
+    def _resolve_base_url(cls, base_url: Optional[str]) -> str:
+        url = base_url or os.environ.get("OLLAMA_BASE_URL") or os.environ.get("OLLAMA_HOST") or cls.DEFAULT_URL
+        url = url.strip()
+        # OLLAMA_HOST 是服务端监听地址，常见写法 0.0.0.0 / 0.0.0.0:11434，客户端不能直接连
+        if url.split("://")[-1].split(":")[0] == "0.0.0.0":
+            url = url.replace("0.0.0.0", "localhost")
+        if "://" not in url:
+            url = "http://" + url
+        if url.count(":") == 1:  # 只有协议里的冒号，没写端口
+            url += ":11434"
+        return url.rstrip("/")
 
     def generate(self, prompt: str, image_path: Optional[str] = None) -> str:
         import requests

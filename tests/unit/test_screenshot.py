@@ -18,6 +18,7 @@ def make_capture(monkeypatch, tmp_path):
     def _make(screens=((1920, 1080),), bgrx=(10, 20, 30, 255), save_dir=None):
         fake = FakeMSS(screens=screens, bgrx=bgrx)
         monkeypatch.setattr(shot_mod.mss, "mss", lambda *a, **k: fake)
+        monkeypatch.setattr(shot_mod.mss, "MSS", lambda *a, **k: fake, raising=False)
         cap = ScreenCapture(save_dir=str(save_dir or tmp_path / "shots"))
         return cap, fake
     return _make
@@ -124,7 +125,6 @@ class TestScreenshotBoundary:
         cap, _ = make_capture(screens=((1920, 1080), (2560, 1440)))
         assert cap.capture_full_screen(monitor_index=0, save=False).size == (4480, 1440)
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：文件名只精确到秒，同一秒内两次截图会互相覆盖")
     def test_two_saves_in_same_second_keep_both_files(self, make_capture, tmp_path, monkeypatch):
         cap, _ = make_capture(save_dir=tmp_path / "o")
         monkeypatch.setattr(shot_mod.time, "time", lambda: 1700000000.5)
@@ -132,7 +132,6 @@ class TestScreenshotBoundary:
         cap.capture_full_screen(save=True)
         assert len(list((tmp_path / "o").glob("*.png"))) == 2
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：monitor_index=-1 被 Python 负索引静默接受，截到了最后一块屏而不是报错")
     def test_negative_monitor_index_rejected(self, make_capture):
         cap, _ = make_capture(screens=((1920, 1080), (1280, 1024)))
         with pytest.raises((IndexError, ValueError)):
@@ -146,14 +145,39 @@ class TestScreenshotException:
         with pytest.raises(IndexError):
             cap.capture_full_screen(monitor_index=5, save=False)
 
-    def test_region_zero_width_raises(self, make_capture):
+    @pytest.mark.parametrize("region", [(1900, 0, 100, 10), (-1, 0, 10, 10), (0, 1075, 10, 10)],
+                             ids=["right_overflow", "negative_left", "bottom_overflow"])
+    def test_region_outside_screen_rejected(self, make_capture, region):
+        cap, fake = make_capture()
+        with pytest.raises(ValueError, match="超出屏幕范围"):
+            cap.capture_region(*region, save=False)
+        assert fake.grabs == []
+
+    def test_region_on_second_monitor_allowed(self, make_capture):
+        cap, _ = make_capture(screens=((1920, 1080), (1920, 1080)))
+        assert cap.capture_region(3000, 500, 200, 100, save=False).size == (200, 100)
+
+    def test_monitor_index_non_int(self, make_capture):
         cap, _ = make_capture()
-        with pytest.raises(Exception):
+        with pytest.raises(IndexError):
+            cap.capture_full_screen(monitor_index="1", save=False)
+
+    def test_filename_unique_across_many_saves(self, make_capture, tmp_path, monkeypatch):
+        cap, _ = make_capture(save_dir=tmp_path / "o")
+        monkeypatch.setattr(shot_mod.time, "time", lambda: 1700000000.0)
+        for _ in range(5):
+            cap.capture_region(0, 0, 2, 2, save=True)
+        assert len(list((tmp_path / "o").glob("region_*.png"))) == 5
+
+    def test_region_zero_width_raises(self, make_capture):
+        cap, fake = make_capture()
+        with pytest.raises(ValueError):
             cap.capture_region(0, 0, 0, 100, save=False)
+        assert fake.grabs == []  # 参数非法时不应调用底层截图
 
     def test_region_negative_height_raises(self, make_capture):
         cap, _ = make_capture()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             cap.capture_region(0, 0, 100, -5, save=False)
 
     def test_grab_backend_error_propagates(self, make_capture):
@@ -167,6 +191,7 @@ class TestScreenshotException:
 
     def test_save_dir_is_existing_file(self, monkeypatch, tmp_path):
         monkeypatch.setattr(shot_mod.mss, "mss", lambda *a, **k: FakeMSS())
+        monkeypatch.setattr(shot_mod.mss, "MSS", lambda *a, **k: FakeMSS(), raising=False)
         f = tmp_path / "not_a_dir"
         f.write_text("x")
         with pytest.raises(FileExistsError):
@@ -176,6 +201,7 @@ class TestScreenshotException:
         def fail(*a, **k):
             raise OSError("no display")
         monkeypatch.setattr(shot_mod.mss, "mss", fail)
+        monkeypatch.setattr(shot_mod.mss, "MSS", fail, raising=False)
         with pytest.raises(OSError):
             ScreenCapture(save_dir=str(tmp_path))
 

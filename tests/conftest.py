@@ -198,6 +198,7 @@ def fake_gui(monkeypatch):
 
     fake = FakePyAutoGUI()
     monkeypatch.setattr(mk, "pyautogui", fake)
+    monkeypatch.setattr(mk, "CLIPBOARD_SETTLE_SEC", 0)
     return fake
 
 

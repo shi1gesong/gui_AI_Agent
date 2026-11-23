@@ -125,6 +125,24 @@ def test_device_hotkey_select_all_delete(notepad):
 
 
 @pytest.mark.boundary
+def test_device_click_start_button_corner_nudged():
+    """Windows 开始按钮在左下角：目标为角点像素时向内偏移，不触发 FAILSAFE"""
+    import pyautogui
+    from control.mouse_keyboard import MouseKeyboardController
+    ctl = MouseKeyboardController()
+    ctl.move_to(0, ctl.screen_height - 1, duration=0)
+    assert tuple(pyautogui.position()) == (1, ctl.screen_height - 2)
+    ctl.move_to(ctl.screen_width // 2, ctl.screen_height // 2, duration=0)
+
+
+@pytest.mark.functional
+def test_device_type_text_chinese_auto(notepad):
+    ctl, _, read = notepad
+    ctl.type_text("天气预报 weather")
+    assert read() == "天气预报 weather"
+
+
+@pytest.mark.boundary
 def test_device_long_chinese_text(notepad):
     ctl, _, read = notepad
     text = "长文本输入测试" * 300
@@ -137,8 +155,9 @@ def test_device_failsafe_corner():
     import pyautogui
     from control.mouse_keyboard import MouseKeyboardController
     ctl = MouseKeyboardController()
+    pyautogui.moveTo(0, 0)  # 模拟用户把鼠标甩到左上角紧急停止
     with pytest.raises(pyautogui.FailSafeException):
-        ctl.click(0, 0)
+        ctl.click(ctl.screen_width // 2, ctl.screen_height // 2)
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(ctl.screen_width // 2, ctl.screen_height // 2)
     pyautogui.FAILSAFE = True

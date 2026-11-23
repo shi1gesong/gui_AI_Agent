@@ -19,7 +19,12 @@ import subprocess
 from pathlib import Path
 
 DATA_ROOT = Path("./data_cache")
-DATA_ROOT.mkdir(exist_ok=True)
+
+
+def _ensure_root() -> Path:
+    """需要写文件时才创建缓存目录（原先在 import 时创建，属于模块级副作用）"""
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    return DATA_ROOT
 
 
 def download_mind2web(sample_limit: int = 200):
@@ -63,7 +68,7 @@ def download_mind2web(sample_limit: int = 200):
             "source": "mind2web",
         })
 
-    out_path = DATA_ROOT / "mind2web_processed.jsonl"
+    out_path = _ensure_root() / "mind2web_processed.jsonl"
     with open(out_path, "w", encoding="utf-8") as f:
         for s in samples:
             f.write(json.dumps(s, ensure_ascii=False) + "\n")
@@ -82,6 +87,7 @@ def clone_screenagent_dataset():
         print(f"ScreenAgent 仓库已存在于 {target_dir}，跳过克隆")
         return target_dir
 
+    _ensure_root()
     print("正在克隆 ScreenAgent 仓库...")
     result = subprocess.run(
         ["git", "clone", "--depth", "1", "https://github.com/niuzaisheng/ScreenAgent.git", str(target_dir)],
@@ -107,6 +113,7 @@ def clone_webarena_repo():
         print(f"WebArena 仓库已存在于 {target_dir}，跳过克隆")
         return target_dir
 
+    _ensure_root()
     print("正在克隆 WebArena 仓库...")
     result = subprocess.run(
         ["git", "clone", "--depth", "1", "https://github.com/web-arena-x/webarena.git", str(target_dir)],
@@ -145,12 +152,96 @@ def preprocess_webarena_tasks():
         except Exception:
             continue
 
-    out_path = DATA_ROOT / "webarena_processed.jsonl"
+    out_path = _ensure_root() / "webarena_processed.jsonl"
     with open(out_path, "w", encoding="utf-8") as f:
         for s in samples:
             f.write(json.dumps(s, ensure_ascii=False) + "\n")
 
     print(f"WebArena 任务处理完成，共 {len(samples)} 条，保存至 {out_path}")
+    return samples
+
+
+def _convert_screenagent_action(act: dict, screen_w: int, screen_h: int):
+    """把 ScreenAgent 的动作格式转换为本项目统一动作格式；Plan/Evaluate 等非执行动作返回 None"""
+    kind = act.get("action_type")
+    if kind == "MouseAction":
+        m_type = act.get("mouse_action_type")
+        pos = act.get("mouse_position") or {}
+        out = {"button": act.get("mouse_button")}
+        if pos:
+            x, y = pos.get("width"), pos.get("height")
+            out.update({"x": x, "y": y,
+                        "x_ratio": round(x / screen_w, 4) if screen_w else None,
+                        "y_ratio": round(y / screen_h, 4) if screen_h else None})
+        if m_type in ("scroll_up", "scroll_down"):
+            n = act.get("scroll_repeat", 1)
+            out.update({"action_type": "scroll", "amount": n if m_type == "scroll_up" else -n})
+        elif m_type in ("click", "double_click", "move", "drag"):
+            out["action_type"] = m_type
+        elif m_type in ("down", "up"):
+            out["action_type"] = f"mouse_{m_type}"
+        else:
+            return None
+        return {k: v for k, v in out.items() if v is not None}
+    if kind == "KeyboardAction":
+        if act.get("keyboard_action_type") == "text":
+            return {"action_type": "type", "text": act.get("keyboard_text", "")}
+        keys = act.get("keyboard_key") or []
+        keys = [keys] if isinstance(keys, str) else list(keys)
+        return {"action_type": "key", "keys": keys}
+    if kind == "WaitAction":
+        return {"action_type": "wait", "seconds": act.get("wait_time", 1)}
+    return None
+
+
+def preprocess_screenagent(include_negative: bool = False):
+    """
+    解析 ScreenAgent 仓库 data/ScreenAgent/{train,test}/<session>/*.json 标注，统一成本项目格式。
+    每个 json 是一步交互：任务指令(task_prompt) + 当前截图(images/<saved_image_name>) + 标注动作(actions)。
+    - *_neg_plan.json / *_neg_eval.json 是人为构造的负样本，默认跳过
+    - 只保留含可执行动作（鼠标/键盘/等待）的样本；PlanAction / EvaluateSubTaskAction 属于规划与评估阶段
+    坐标同时保留原始像素与相对屏幕的比例，便于在不同分辨率下复用。
+    """
+    base = DATA_ROOT / "ScreenAgent" / "data" / "ScreenAgent"
+    if not base.exists():
+        print(f"未找到 {base}，请先运行 clone_screenagent_dataset()")
+        return []
+
+    samples = []
+    for f in sorted(base.rglob("*.json")):
+        if not include_negative and (f.stem.endswith("_neg_plan") or f.stem.endswith("_neg_eval")):
+            continue
+        try:
+            with open(f, "r", encoding="utf-8") as fp:
+                item = json.load(fp)
+            if not isinstance(item, dict):
+                continue
+            w, h = item.get("video_width") or 0, item.get("video_height") or 0
+            actions = [a for a in (_convert_screenagent_action(x, w, h) for x in item.get("actions", [])
+                                   if isinstance(x, dict)) if a]
+            if not actions:
+                continue
+            img = item.get("saved_image_name")
+            samples.append({
+                "task_id": f"{item.get('session_id', f.parent.name)}/{f.stem}",
+                "instruction": item.get("task_prompt_zh") or item.get("task_prompt") or item.get("task_prompt_en", ""),
+                "instruction_en": item.get("task_prompt_en", ""),
+                "sub_task": item.get("current_task", ""),
+                "screenshot_path": str(f.parent / "images" / img) if img else None,
+                "screen_size": [w, h],
+                "action_sequence": actions,
+                "split": f.relative_to(base).parts[0],
+                "source": "screenagent",
+            })
+        except Exception:
+            continue
+
+    out_path = _ensure_root() / "screenagent_processed.jsonl"
+    with open(out_path, "w", encoding="utf-8") as fp:
+        for s in samples:
+            fp.write(json.dumps(s, ensure_ascii=False) + "\n")
+
+    print(f"ScreenAgent 处理完成，共 {len(samples)} 条，保存至 {out_path}")
     return samples
 
 
@@ -162,6 +253,7 @@ if __name__ == "__main__":
 
     print("\n--- 2. ScreenAgent ---")
     clone_screenagent_dataset()
+    screenagent_samples = preprocess_screenagent()
 
     print("\n--- 3. WebArena ---")
     clone_webarena_repo()
@@ -170,4 +262,4 @@ if __name__ == "__main__":
     print("\n===== 汇总 =====")
     print(f"Mind2Web 样本数: {len(mind2web_samples)}")
     print(f"WebArena 样本数: {len(webarena_samples)}")
-    print("ScreenAgent: 已克隆仓库，需人工查阅具体数据集格式后按需扩展预处理逻辑")
+    print(f"ScreenAgent 样本数: {len(screenagent_samples)}")

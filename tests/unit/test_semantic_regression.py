@@ -86,28 +86,34 @@ class TestSemanticFunctional:
 
 @pytest.mark.functional
 class TestSemanticWeek3Regression:
-    """第3周 demo 用例的如实结果：以下 3 项目前均失败（strict xfail，修好后会变成 XPASS 并提醒更新）"""
+    """第3周 demo 用例回放。假设模型每次重试都重复同样的错误（最坏情况），验证修复后的 Agent
+    不再把错误动作交出去，并且 Reflect 不再误判完成。修复前这 3 项均失败（见 git 历史中的 strict xfail）。"""
 
     def _replay(self):
-        agent = make_agent([WEEK3_PLAN, WEEK3_ACT1, WEEK3_ACT2, WEEK3_REFLECT])
+        agent = make_agent([WEEK3_PLAN] + [WEEK3_ACT1] * 3 + [WEEK3_ACT2] * 3 + [WEEK3_REFLECT])
         return agent.run("打开浏览器并搜索天气预报", lambda: WEEK3_SCREEN, max_steps=2)
 
     def test_week3_replay_runs_without_crash(self):
         res = self._replay()
         assert len(res["action_history"]) == 2
 
-    @pytest.mark.xfail(strict=True, reason="第3周真实输出：『打开默认浏览器』被映射为点击『设置』，语义错误")
+    def test_week3_wrong_outputs_were_rejected(self):
+        """模型的原始输出（点击“设置”、点击“搜索”）被校验拦下并留档"""
+        h = self._replay()["action_history"]
+        assert h[0]["action"]["_rejected"][0]["output"]["target_text"] == "设置"
+        assert any("无关" in r for r in h[0]["action"]["_rejected"][0]["reasons"])
+        assert any("type" in r for r in h[1]["action"]["_rejected"][0]["reasons"])
+
     def test_week3_subtask1_semantically_correct(self):
         ok, reasons = judge(WEEK3_CASE1, self._replay()["action_history"][0]["action"])
         assert ok, reasons
 
-    @pytest.mark.xfail(strict=True, reason="第3周真实输出：输入类子任务被判为 click『搜索』，没有输入『天气预报』")
     def test_week3_subtask2_semantically_correct(self):
         ok, reasons = judge(WEEK3_CASE2, self._replay()["action_history"][1]["action"])
         assert ok, reasons
 
-    @pytest.mark.xfail(strict=True, reason="Reflect 在动作从未真正执行（Agent 未接入控制模块）且动作错误的情况下判定 is_complete=True")
     def test_week3_reflection_not_falsely_complete(self):
-        res = self._replay()
-        all_ok = all(judge(c, h["action"])[0] for c, h in zip((WEEK3_CASE1, WEEK3_CASE2), res["action_history"]))
-        assert res["reflection"]["is_complete"] == all_ok
+        """未接执行器，动作从未执行：即使 LLM 说完成，也必须判定未完成"""
+        r = self._replay()["reflection"]
+        assert r["is_complete"] is False and r["llm_is_complete"] is True
+        assert any("未实际执行" in g for g in r["guard_reasons"])

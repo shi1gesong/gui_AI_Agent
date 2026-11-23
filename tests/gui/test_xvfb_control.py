@@ -196,30 +196,35 @@ class TestRealControlBoundary:
         time.sleep(0.3)
         assert log.last_text() == "x"
 
-    def test_click_outside_screen_clamped(self, env):
-        """越界坐标：X11 下指针被限制在屏幕边缘（不会报错），记录现状"""
-        ctl, log, w, h = env
-        ctl.move_to(w + 500, h // 2, duration=0)
-        x, _ = ctl.get_mouse_position()
-        assert x == w - 1
-
     @pytest.mark.parametrize("corner", ["top_left", "top_right", "bottom_left", "bottom_right"])
-    def test_click_exact_corner_pixel_trips_failsafe(self, env, corner):
-        """点击屏幕四角像素本身就会触发 FAILSAFE（如 Windows 左下角开始按钮区域），Agent 定位时需避开角点"""
-        import pyautogui
+    def test_click_exact_corner_pixel_nudged(self, env, corner):
+        """目标落在四角像素时向内偏移 1 像素：点击真实生效，不再触发 FAILSAFE（修复前会抛 FailSafeException）"""
         ctl, log, w, h = env
         x = 0 if "left" in corner else w - 1
         y = 0 if "top" in corner else h - 1
-        with pytest.raises(pyautogui.FailSafeException):
-            ctl.click(x, y)
+        ctl.click(x, y)
+        evs = log.wait_for(lambda es: any(e["ev"] == "press" for e in es))
+        press = [e for e in evs if e["ev"] == "press"][-1]
+        assert (press["x"], press["y"]) == (1 if x == 0 else w - 2, 1 if y == 0 else h - 2)
 
-    @pytest.mark.xfail(strict=True, reason="已知问题：type_text 用 typewrite 输入中文时中文被静默丢弃，只剩 ASCII")
-    def test_type_text_chinese_with_typewrite(self, env):
+
+
+    def test_type_text_chinese_auto_clipboard(self, env):
+        """修复前 type_text 会丢掉中文只剩 abc；现在自动走剪贴板"""
         ctl, log, w, h = env
         ctl.click(*pt(w, h, 0.5, 0.2))
         ctl.type_text("搜索abc", interval=0)
         log.wait_for(lambda es: any(e["ev"] == "text" and "abc" in e["value"] for e in es))
         assert log.last_text() == "搜索abc"
+
+    def test_clipboard_restored_after_chinese_input(self, env):
+        import pyperclip
+        ctl, log, w, h = env
+        pyperclip.copy("用户原来复制的内容")
+        ctl.click(*pt(w, h, 0.5, 0.2))
+        ctl.type_text_unicode("临时输入")
+        log.wait_for(lambda es: any(e["ev"] == "text" and e["value"] == "临时输入" for e in es))
+        assert log.last_text() == "临时输入" and pyperclip.paste() == "用户原来复制的内容"
 
 
 def ctl_move_safe(w, h):
@@ -232,9 +237,10 @@ def ctl_move_safe(w, h):
 @pytest.mark.exception
 class TestRealControlException:
     def test_failsafe_top_left_corner(self, env):
+        """用户把鼠标甩到左上角紧急停止：FAILSAFE 仍然有效"""
         import pyautogui
         ctl, log, w, h = env
-        ctl.move_to(0, 0, duration=0)
+        pyautogui.moveTo(0, 0)
         try:
             with pytest.raises(pyautogui.FailSafeException):
                 ctl.click(w // 2, h // 2)
@@ -244,7 +250,7 @@ class TestRealControlException:
     def test_failsafe_blocks_typing(self, env):
         import pyautogui
         ctl, log, w, h = env
-        ctl.move_to(w - 1, 0, duration=0)
+        pyautogui.moveTo(w - 1, 0)
         try:
             with pytest.raises(pyautogui.FailSafeException):
                 ctl.type_text("should not type", interval=0)
@@ -258,10 +264,18 @@ class TestRealControlException:
         with pytest.raises(Exception):
             ctl.click(*pt(w, h, 0.5, 0.5), button="side")
 
-    def test_unknown_key_is_silently_ignored(self, env):
-        """pyautogui 对不认识的按键名静默忽略（不报错也不输入）—— 记录现状，Agent 侧需要自行校验按键名"""
+    def test_unknown_key_rejected(self, env):
+        """pyautogui 对不认识的按键名会静默忽略；控制模块现在先校验并报错"""
         ctl, log, w, h = env
         ctl.click(*pt(w, h, 0.5, 0.2))
-        ctl.press_key("not_a_real_key")
+        with pytest.raises(ValueError):
+            ctl.press_key("not_a_real_key")
         time.sleep(0.3)
-        assert [e for e in log.of("key")] == []
+        assert log.of("key") == []
+
+    def test_click_outside_screen_rejected(self, env):
+        ctl, log, w, h = env
+        with pytest.raises(ValueError):
+            ctl.click(w + 500, h // 2)
+        time.sleep(0.2)
+        assert log.of("press") == []
