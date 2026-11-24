@@ -12,7 +12,9 @@ from control.mouse_keyboard import MouseKeyboardController
 @pytest.fixture
 def ctl(fake_gui):
     # 显式关闭“统一走剪贴板”，使逐字输入相关用例在 Windows 和 Linux 上行为一致
-    return MouseKeyboardController(prefer_clipboard=False)
+    c = MouseKeyboardController(prefer_clipboard=False)
+    c.wheel_delta = 1  # 按 Linux 语义断言滚动格数；Windows 换算单独测试
+    return c
 
 
 @pytest.mark.functional
@@ -112,6 +114,18 @@ class TestControlFunctional:
         c = MouseKeyboardController(prefer_clipboard=True)
         c.type_text("Hello GUI Agent")
         assert fake_clipboard.history[0] == "Hello GUI Agent" and "typewrite" not in fake_gui.names()
+
+    @pytest.mark.parametrize("amount", [-10, -1, 3])
+    def test_scroll_windows_uses_wheel_delta(self, fake_gui, monkeypatch, amount):
+        """pyautogui 在 Windows 上把数值原样作为滚轮增量，一格是 120；修复前 scroll(-10) 只滚 1/12 格（真机验证无效果）"""
+        monkeypatch.setattr(mk.sys, "platform", "win32")
+        MouseKeyboardController().scroll(amount)
+        assert fake_gui.calls[-1] == ("scroll", (amount * 120,), {})
+
+    def test_scroll_linux_wheel_delta_is_one(self, fake_gui, monkeypatch):
+        monkeypatch.setattr(mk.sys, "platform", "linux")
+        MouseKeyboardController().scroll(-3)
+        assert fake_gui.calls[-1] == ("scroll", (-3,), {})
 
     @pytest.mark.parametrize("platform,expected", [("win32", True), ("linux", False), ("darwin", False)])
     def test_prefer_clipboard_default_by_platform(self, fake_gui, monkeypatch, platform, expected):

@@ -18,6 +18,9 @@
 - Windows 下 type_text 默认统一走剪贴板粘贴。中文输入法处于中文模式时，typewrite 逐个按下的英文字母
   会被输入法截获（真机上出现过 "Hello GUI Agent" 变成 "HelloGUI Agent"、输入变成 "Y" 等）。
   可用 MouseKeyboardController(prefer_clipboard=False) 恢复逐字敲键盘的方式。
+- scroll 的 amount 统一为“滚轮格数”。pyautogui 在 Windows 上把 clicks 原样作为滚轮增量传给系统，
+  而 Windows 一格滚轮是 120（WHEEL_DELTA），所以 scroll(-10) 实际只滚了 1/12 格，真机上完全没有滚动；
+  现在 Windows 上自动乘以 120。Linux(X11) 上 pyautogui 本来就按格数发送，不需要换算。
 """
 import sys
 import time
@@ -28,6 +31,9 @@ import pyautogui
 # 每次操作之间的默认间隔，避免操作过快导致目标程序来不及响应
 pyautogui.PAUSE = 0.3
 pyautogui.FAILSAFE = True
+
+# Windows 滚轮一格对应的增量（WHEEL_DELTA）
+WINDOWS_WHEEL_DELTA = 120
 
 # 剪贴板粘贴后等待目标程序读取剪贴板的时间，过早恢复旧内容会导致粘贴进旧内容
 CLIPBOARD_SETTLE_SEC = 0.15
@@ -40,6 +46,8 @@ class MouseKeyboardController:
         if prefer_clipboard is None:
             prefer_clipboard = sys.platform.startswith("win")
         self.prefer_clipboard = prefer_clipboard
+        # 一格滚轮对应传给 pyautogui.scroll 的数值
+        self.wheel_delta = WINDOWS_WHEEL_DELTA if sys.platform.startswith("win") else 1
 
     # ---------- 坐标与按键校验 ----------
     def _safe_point(self, x: int, y: int):
@@ -81,11 +89,11 @@ class MouseKeyboardController:
         pyautogui.dragTo(end_x, end_y, duration=duration, button="left")
 
     def scroll(self, amount: int, x: int = None, y: int = None):
-        """滚动，amount为正向上滚，为负向下滚。可选先移动到指定坐标再滚动"""
+        """滚动 amount 格（与鼠标滚轮一格一致），为正向上滚，为负向下滚。可选先移动到指定坐标再滚动"""
         if x is not None and y is not None:
             x, y = self._safe_point(x, y)
             pyautogui.moveTo(x, y)
-        pyautogui.scroll(amount)
+        pyautogui.scroll(int(amount) * self.wheel_delta)
 
     # ---------- 键盘操作 ----------
     def type_text(self, text: str, interval: float = 0.02):
