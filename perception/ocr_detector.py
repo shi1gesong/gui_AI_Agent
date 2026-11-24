@@ -111,11 +111,12 @@ def benchmark_engines(image_path: str):
 
 
 def find_latest_screenshot(screenshots_dir: str = "./screenshots") -> str | None:
-    """自动查找screenshots目录下最新生成的截图文件（按修改时间排序）"""
+    """自动查找screenshots目录下最新生成的截图文件（按修改时间排序）。
+    跳过 annotated_* 标注图，避免把画过框的图再拿去做 OCR。"""
     folder = Path(screenshots_dir)
     if not folder.exists():
         return None
-    images = list(folder.glob("*.png"))
+    images = [f for f in folder.glob("*.png") if not f.name.startswith("annotated")]
     if not images:
         return None
     latest = max(images, key=lambda f: f.stat().st_mtime)
