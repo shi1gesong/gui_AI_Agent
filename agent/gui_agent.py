@@ -26,6 +26,7 @@
   rule          ：完全不用 LLM（Ollama 未启动时也能跑模板任务）
 """
 import json
+import re
 import time
 import traceback
 from pathlib import Path
@@ -39,6 +40,9 @@ except ImportError:
     from planner import HybridPlanner, Plan
 
 ACT_MODES = ("hybrid", "llm", "rule")
+
+
+_PASSIVE_RE = re.compile(r"(查看|阅读|浏览|看到|看一下|获取)[^，。,;；]{0,12}(结果|内容|信息|页面)")
 
 
 class GUIAgent:
@@ -152,11 +156,25 @@ class GUIAgent:
             try:
                 r = self.brain.reflect(instruction)
                 r["mode"] = "llm+guard"
-                return r
+                return self._guard_over_strict(instruction, steps, r)
             except Exception as e:
                 problems.append(f"LLM 反思调用失败: {type(e).__name__}: {e}")
         return {"is_complete": not problems, "mode": "rule",
                 "reason": "所有子任务均已成功执行" if not problems else "；".join(problems)}
+
+    @staticmethod
+    def _guard_over_strict(instruction: str, steps: List[dict], r: dict) -> dict:
+        """反思过严的规则把关（2026-11-24 真机 --act llm：T2 搜索 0/3，检查器都通过，
+        qwen3:8b 却以“用户尚未查看天气预报结果”判未完成）。
+        只在全部子任务真实执行成功、且 LLM 的理由只是要求“查看/阅读/浏览结果”这类指令没要求的被动操作时改判完成，
+        原判断保留在 llm_is_complete / override_reason 里。"""
+        if r.get("is_complete") or r.get("guard_reasons") or not steps or not all(s["ok"] for s in steps):
+            return r
+        text = f"{r.get('reason', '')} {r.get('next_action_suggestion', '')}"
+        if not _PASSIVE_RE.search(text) or _PASSIVE_RE.search(instruction):
+            return r
+        return {**r, "llm_is_complete": False, "is_complete": True,
+                "override_reason": "所有子任务均已成功执行；LLM 要求的“查看结果”超出指令范围"}
 
     def run(self, instruction: str, checker: Optional[Callable[[], tuple]] = None,
             plan: Optional[Plan] = None) -> dict:
@@ -206,6 +224,8 @@ class GUIAgent:
         result["sec"] = round(time.time() - t0, 2)
         self.log(f"[反思] {'完成' if result['reflection'].get('is_complete') else '未完成'}："
                  f"{result['reflection'].get('reason', '')}")
+        if result["reflection"].get("override_reason"):
+            self.log(f"[反思] 规则改判完成：{result['reflection']['override_reason']}")
         if "check" in result:
             self.log(f"[检查] {'通过' if result['check']['ok'] else '不通过'}：{result['check']['message']}")
         self.log(f"[结果] {'成功' if success else '失败'}，用时 {result['sec']} 秒")

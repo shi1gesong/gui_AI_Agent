@@ -225,6 +225,13 @@ nodeid,module,category,env,status
 "tests/unit/test_action_space.py::TestActionSpaceMultiResolution::test_fallback_independent_of_resolution[3840-2160]",test_action_space.py,multi_resolution,mock,passed
 "tests/unit/test_action_space.py::TestAddressBarFallback::test_address_bar_not_visible_uses_ctrl_l",test_action_space.py,functional,mock,passed
 "tests/unit/test_action_space.py::TestAddressBarFallback::test_address_bar_visible_clicks_it",test_action_space.py,functional,mock,passed
+"tests/unit/test_action_space.py::TestNormalizeLLMAction::test_direct_type_target_dropped_and_enter_added",test_action_space.py,functional,mock,passed
+"tests/unit/test_action_space.py::TestNormalizeLLMAction::test_field_type_keeps_target",test_action_space.py,functional,mock,passed
+"tests/unit/test_action_space.py::TestNormalizeLLMAction::test_llm_act_applies_normalization",test_action_space.py,functional,mock,passed
+"tests/unit/test_action_space.py::TestNormalizeLLMActionBoundary::test_existing_enter_not_duplicated",test_action_space.py,boundary,mock,passed
+"tests/unit/test_action_space.py::TestNormalizeLLMActionBoundary::test_non_type_untouched[act0]",test_action_space.py,boundary,mock,passed
+"tests/unit/test_action_space.py::TestNormalizeLLMActionBoundary::test_non_type_untouched[act1]",test_action_space.py,boundary,mock,passed
+"tests/unit/test_action_space.py::TestNormalizeLLMActionBoundary::test_non_type_untouched[not a dict]",test_action_space.py,boundary,mock,passed
 "tests/unit/test_action_validator.py::TestValidatorBoundary::test_fallback_none_when_no_intent",test_action_validator.py,boundary,mock,passed
 "tests/unit/test_action_validator.py::TestValidatorBoundary::test_find_element_empty_target",test_action_validator.py,boundary,mock,passed
 "tests/unit/test_action_validator.py::TestValidatorBoundary::test_find_element_substring",test_action_validator.py,boundary,mock,passed
@@ -608,6 +615,13 @@ nodeid,module,category,env,status
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_with_console_and_misread_placeholder",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_with_console_exact_placeholder",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_without_autofocus_clicks_label",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestReflectOverStrict::test_passive_view_request_overridden",test_gui_agent.py,functional,mock,passed
+"tests/unit/test_gui_agent.py::TestReflectOverStrict::test_prompt_says_no_extra_steps",test_gui_agent.py,functional,mock,passed
+"tests/unit/test_gui_agent.py::TestReflectOverStrictBoundary::test_not_overridden_when_instruction_asks_to_view",test_gui_agent.py,boundary,mock,passed
+"tests/unit/test_gui_agent.py::TestReflectOverStrictBoundary::test_not_overridden_when_step_failed",test_gui_agent.py,boundary,mock,passed
+"tests/unit/test_gui_agent.py::TestReflectOverStrictException::test_substantive_incomplete_kept[-]",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestReflectOverStrictException::test_substantive_incomplete_kept[\u6d4f\u89c8\u5668\u6ca1\u6709\u6253\u5f00-\u91cd\u65b0\u6253\u5f00\u6d4f\u89c8\u5668]",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestReflectOverStrictException::test_substantive_incomplete_kept[\u6d88\u606f\u8fd8\u6ca1\u6709\u53d1\u9001-\u70b9\u51fb\u53d1\u9001\u6309\u94ae]",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_env_priority",test_llm_interface.py,boundary,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_reads_env",test_llm_interface.py,boundary,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_trailing_slash",test_llm_interface.py,boundary,mock,passed

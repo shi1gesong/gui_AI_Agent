@@ -372,6 +372,27 @@ def fallback_action(subtask: str, elements: List[dict]) -> Optional[dict]:
     return None
 
 
+def normalize_action(subtask: str, action: dict) -> dict:
+    """校验通过后补齐 LLM 动作里与子任务明确矛盾或遗漏的细节，不改变动作类型。
+    2026-11-24 真机 --act llm：子任务“直接输入“天气预报”并按回车”，qwen3:8b 输出
+    {"type", target_text: "天气预报"}：执行器先去点击屏幕上的“天气预报”字样（会抢走地址栏焦点），并且漏了回车。"""
+    if not isinstance(action, dict) or action.get("action_type") != "type":
+        return action
+    intent = SubtaskIntent(subtask)
+    fixes, out = [], dict(action)
+    if intent.direct_type and str(out.get("target_text") or "").strip():
+        fixes.append(f"直接输入不点击输入框，忽略 target_text「{out['target_text']}」")
+        out["target_text"] = ""
+    follow = list(out.get("follow_up") or [])
+    if intent.key and not any(f.get("action_type") == "key" for f in follow):
+        follow.append({"action_type": "key", "target_text": "", "input_text": intent.key})
+        out["follow_up"] = follow
+        fixes.append(f"补上子任务要求的按键 {intent.key}")
+    if fixes:
+        out["_normalized"] = fixes
+    return out
+
+
 def needs_screen(action: Optional[dict]) -> bool:
     """该动作执行前是否需要截图 + OCR（click/double_click 一定需要；type 指定了输入框时需要）"""
     if not action:

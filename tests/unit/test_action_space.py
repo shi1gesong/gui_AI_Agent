@@ -220,3 +220,44 @@ class TestAddressBarFallback:
     def test_address_bar_visible_clicks_it(self):
         fb = fallback_action("在地址栏输入“天气预报”", [{"text": "地址栏", "bbox": [0, 0, 600, 30]}])
         assert fb["action_type"] == "type" and fb["target_text"] == "地址栏"
+
+
+@pytest.mark.functional
+class TestNormalizeLLMAction:
+    """2026-11-24 真机 --act llm：qwen3:8b 对“直接输入“天气预报”并按回车”输出 type + target_text「天气预报」、漏了回车"""
+
+    def test_direct_type_target_dropped_and_enter_added(self):
+        from action_validator import normalize_action
+        a = normalize_action("直接输入“天气预报”并按回车", A("type", "天气预报", "天气预报"))
+        assert a["target_text"] == "" and a["follow_up"] == [{"action_type": "key", "target_text": "",
+                                                             "input_text": "enter"}]
+        assert len(a["_normalized"]) == 2 and not needs_screen(a)
+
+    def test_field_type_keeps_target(self):
+        from action_validator import normalize_action
+        a = normalize_action("在“消息内容”框中输入“今晚开会”", A("type", "消息内容", "今晚开会"))
+        assert a["target_text"] == "消息内容" and "_normalized" not in a
+
+    def test_llm_act_applies_normalization(self):
+        pytest.importorskip("langchain_core")
+        import json
+        from base_agent import BaseGUIAgent, LangChainLLMWrapper
+        from fakes import ScriptedLLM
+        b = BaseGUIAgent(llm_mode="api")
+        b.llm = LangChainLLMWrapper(inner_llm=ScriptedLLM([json.dumps(
+            {"action_type": "type", "target_text": "天气预报", "input_text": "天气预报"}, ensure_ascii=False)]))
+        a = b.act("直接输入“天气预报”并按回车", json.dumps([{"text": "天气预报", "bbox": [0, 0, 100, 20]}], ensure_ascii=False))
+        assert a["target_text"] == "" and a["follow_up"][0]["input_text"] == "enter"
+
+
+@pytest.mark.boundary
+class TestNormalizeLLMActionBoundary:
+    def test_existing_enter_not_duplicated(self):
+        from action_validator import normalize_action
+        a = normalize_action("直接输入“x”并按回车", A("type", "", "x", follow_up=[A("key", "", "enter")]))
+        assert len(a["follow_up"]) == 1 and "_normalized" not in a
+
+    @pytest.mark.parametrize("act", [A("click", "发送"), A("wait", "", "2"), "not a dict"])
+    def test_non_type_untouched(self, act):
+        from action_validator import normalize_action
+        assert normalize_action("直接输入“x”并按回车", act) is act

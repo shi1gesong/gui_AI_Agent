@@ -367,3 +367,53 @@ class TestGUIAgentMultiResolution:
         agent, sim, ctx = make(tmp_path, logical=(2560, 1440))
         sim.ox, sim.oy = 1600, 700
         assert run_task(agent, task("T4", ctx), ctx)["success"]
+
+
+@pytest.mark.functional
+class TestReflectOverStrict:
+    """2026-11-24 真机 --act llm：T2 搜索 0/3，检查器通过，qwen3:8b 以“用户尚未查看结果”判未完成"""
+
+    STRICT = {"is_complete": False, "reason": "用户尚未查看天气预报结果，任务未完成",
+              "next_action_suggestion": "查看天气预报页面内容"}
+
+    def test_passive_view_request_overridden(self, tmp_path):
+        brain, fake = brain_with([self.STRICT])
+        agent, sim, ctx = make(tmp_path, brain=brain)
+        r = agent.run("打开浏览器")
+        ref = r["reflection"]
+        assert ref["is_complete"] is True and ref["llm_is_complete"] is False and "override_reason" in ref
+        assert r["success"] is True
+
+    def test_prompt_says_no_extra_steps(self, tmp_path):
+        brain, fake = brain_with([{"is_complete": True, "reason": "ok"}])
+        agent, sim, ctx = make(tmp_path, brain=brain)
+        agent.run("打开浏览器")
+        assert "不要追加任务目标没有要求的事情" in fake.prompts[-1]
+
+
+@pytest.mark.boundary
+class TestReflectOverStrictBoundary:
+    def test_not_overridden_when_step_failed(self, tmp_path):
+        brain, fake = brain_with([TestReflectOverStrict.STRICT])
+        agent, sim, ctx = make(tmp_path, brain=brain, step_retries=0)
+        r = agent.run("x", plan=Plan(["关闭计算器"], "test"))
+        assert r["reflection"]["is_complete"] is False and "override_reason" not in r["reflection"]
+
+    def test_not_overridden_when_instruction_asks_to_view(self, tmp_path):
+        brain, fake = brain_with([{"is_complete": False, "reason": "还没查看搜索结果",
+                                   "next_action_suggestion": "查看结果页面"}])
+        agent, sim, ctx = make(tmp_path, brain=brain)
+        r = agent.run("查看搜索结果", plan=Plan(["打开浏览器"], "test"))
+        assert r["reflection"]["is_complete"] is False
+
+
+@pytest.mark.exception
+class TestReflectOverStrictException:
+    @pytest.mark.parametrize("reason,suggest", [
+        ("消息还没有发送", "点击发送按钮"), ("浏览器没有打开", "重新打开浏览器"), ("", ""),
+    ])
+    def test_substantive_incomplete_kept(self, tmp_path, reason, suggest):
+        brain, fake = brain_with([{"is_complete": False, "reason": reason, "next_action_suggestion": suggest}])
+        agent, sim, ctx = make(tmp_path, brain=brain)
+        r = agent.run("打开浏览器")
+        assert r["reflection"]["is_complete"] is False and "override_reason" not in r["reflection"]

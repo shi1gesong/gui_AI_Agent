@@ -24,10 +24,10 @@ from langchain_core.language_models.llms import LLM
 from langchain_core.prompts import PromptTemplate
 
 try:  # 以包方式导入（agent.base_agent）
-    from .action_validator import fallback_action, parse_screen_elements, validate_action
+    from .action_validator import fallback_action, normalize_action, parse_screen_elements, validate_action
     from .llm_interface import BaseLLMInterface, build_llm_interface
 except ImportError:  # 直接运行本文件 / 把 agent/ 加入 sys.path 时
-    from action_validator import fallback_action, parse_screen_elements, validate_action
+    from action_validator import fallback_action, normalize_action, parse_screen_elements, validate_action
     from llm_interface import BaseLLMInterface, build_llm_interface
 
 
@@ -100,7 +100,11 @@ REFLECTING_PROMPT = PromptTemplate.from_template(
 已执行的子任务与动作记录（含是否真正执行成功）：
 {action_history}
 
-请判断当前任务是否已经完成。严格按以下JSON格式输出：
+请判断当前任务是否已经完成。判断规则：
+1. 只看任务目标本身要求的操作。目标要求的操作都已真正执行成功，就算完成。
+2. 不要追加任务目标没有要求的事情。例如“搜索天气预报”在搜索结果页出现后就已完成，不需要“查看/阅读结果”。
+3. 有子任务未执行或执行失败时，判为未完成。
+严格按以下JSON格式输出：
 {{"is_complete": true/false, "reason": "简要说明判断依据", "next_action_suggestion": "若未完成，建议下一步做什么"}}
 """
 )
@@ -174,6 +178,7 @@ class BaseGUIAgent:
                 action = action[0] if action and isinstance(action[0], dict) else {"_parse_error": True, "raw": raw}
             reasons = validate_action(subtask, action, elements)
             if not reasons:
+                action = normalize_action(subtask, action)
                 break
             rejected.append({"output": action, "reasons": reasons})
             feedback = ("\n注意：你上一次的输出 " + json.dumps(action, ensure_ascii=False)
