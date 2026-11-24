@@ -102,6 +102,8 @@ cd "$(wslpath "$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')")/Des
 pip install -U "transformers>=4.49,<4.58" peft accelerate pillow matplotlib pytest
 ```
 
+> 如果报 `Failed to find C compiler`：新版 peft 会顺带导入 bitsandbytes，而它需要 gcc。默认训练用不到 bitsandbytes，脚本检测到这个错误会自动卸载它；也可以手动 `pip uninstall -y bitsandbytes`。只有加 `--load-4bit`（QLoRA）时才需要先 `sudo apt install -y build-essential`。
+
 ### 第 3 步：先跑 5 分钟冒烟，确认环境没问题
 
 ```bash

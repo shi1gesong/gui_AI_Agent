@@ -21,6 +21,14 @@ fi
 step() { echo; echo "==================== $* ===================="; }
 
 step "0/7 检查 GPU"
+# 新版 peft 导入时会顺带导入 bitsandbytes → triton，WSL 里没装 gcc 时会报 "Failed to find C compiler"。
+# 默认训练不用 4bit 量化，不需要 bitsandbytes；只有 --load-4bit 才需要（那时请先 sudo apt install -y build-essential）。
+if ! python -c "import peft" >/dev/null 2>&1; then
+  if python -c "import bitsandbytes" 2>&1 | grep -q "C compiler"; then
+    echo "检测到 bitsandbytes 因缺少 C 编译器无法导入，自动卸载（默认训练用不到它）"
+    pip uninstall -y bitsandbytes
+  fi
+fi
 python -c "import torch, transformers, peft; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '-'); print('transformers', transformers.__version__, 'peft', peft.__version__)" | tee "$LOGS/env.txt"
 
 step "1/7 构建数据集（ScreenAgent → train/val/test）"
