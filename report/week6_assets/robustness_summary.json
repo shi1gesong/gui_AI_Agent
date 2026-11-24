@@ -1,0 +1,212 @@
+{
+ "v1|none": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 169.99999999999997,
+  "false_success": 0
+ },
+ "v1|ALL": {
+  "n": 630,
+  "ok": 405,
+  "retries": 197,
+  "virtual": 2409.2000000000007,
+  "false_success": 20
+ },
+ "v2|none": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 188.00000000000003,
+  "false_success": 0
+ },
+ "v2|ALL": {
+  "n": 630,
+  "ok": 589,
+  "retries": 299,
+  "virtual": 2920.199999999995,
+  "false_success": 0
+ },
+ "v1|slow_load": {
+  "n": 45,
+  "ok": 25,
+  "retries": 20,
+  "virtual": 155.0,
+  "false_success": 0
+ },
+ "v2|slow_load": {
+  "n": 45,
+  "ok": 45,
+  "retries": 60,
+  "virtual": 258.0,
+  "false_success": 0
+ },
+ "v1|popup_on_select": {
+  "n": 45,
+  "ok": 25,
+  "retries": 20,
+  "virtual": 155.0,
+  "false_success": 0
+ },
+ "v2|popup_on_select": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 188.00000000000003,
+  "false_success": 0
+ },
+ "v1|popup_timed": {
+  "n": 45,
+  "ok": 25,
+  "retries": 20,
+  "virtual": 155.0,
+  "false_success": 0
+ },
+ "v2|popup_timed": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 188.00000000000003,
+  "false_success": 0
+ },
+ "v1|lost_click": {
+  "n": 45,
+  "ok": 25,
+  "retries": 0,
+  "virtual": 169.99999999999997,
+  "false_success": 20
+ },
+ "v2|lost_click": {
+  "n": 45,
+  "ok": 45,
+  "retries": 45,
+  "virtual": 219.5,
+  "false_success": 0
+ },
+ "v1|ocr_flaky": {
+  "n": 45,
+  "ok": 37,
+  "retries": 17,
+  "virtual": 174.2,
+  "false_success": 0
+ },
+ "v2|ocr_flaky": {
+  "n": 45,
+  "ok": 45,
+  "retries": 40,
+  "virtual": 228.00000000000003,
+  "false_success": 0
+ },
+ "v1|ocr_typo": {
+  "n": 45,
+  "ok": 38,
+  "retries": 15,
+  "virtual": 173.0,
+  "false_success": 0
+ },
+ "v2|ocr_typo": {
+  "n": 45,
+  "ok": 44,
+  "retries": 14,
+  "virtual": 195.70000000000005,
+  "false_success": 0
+ },
+ "v1|focus_steal": {
+  "n": 45,
+  "ok": 25,
+  "retries": 20,
+  "virtual": 158.99999999999997,
+  "false_success": 0
+ },
+ "v2|focus_steal": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 188.00000000000003,
+  "false_success": 0
+ },
+ "v1|screenshot_fail": {
+  "n": 45,
+  "ok": 25,
+  "retries": 20,
+  "virtual": 155.0,
+  "false_success": 0
+ },
+ "v2|screenshot_fail": {
+  "n": 45,
+  "ok": 45,
+  "retries": 20,
+  "virtual": 195.00000000000003,
+  "false_success": 0
+ },
+ "v1|slow_window": {
+  "n": 45,
+  "ok": 40,
+  "retries": 25,
+  "virtual": 288.9999999999999,
+  "false_success": 0
+ },
+ "v2|slow_window": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 268.0,
+  "false_success": 0
+ },
+ "v1|dpi_change": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 169.99999999999997,
+  "false_success": 0
+ },
+ "v2|dpi_change": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 188.00000000000003,
+  "false_success": 0
+ },
+ "v1|llm_down": {
+  "n": 45,
+  "ok": 0,
+  "retries": 0,
+  "virtual": 169.99999999999997,
+  "false_success": 0
+ },
+ "v2|llm_down": {
+  "n": 45,
+  "ok": 45,
+  "retries": 0,
+  "virtual": 188.00000000000003,
+  "false_success": 0
+ },
+ "v1|slow_load_long": {
+  "n": 45,
+  "ok": 25,
+  "retries": 20,
+  "virtual": 155.0,
+  "false_success": 0
+ },
+ "v2|slow_load_long": {
+  "n": 45,
+  "ok": 25,
+  "retries": 60,
+  "virtual": 207.99999999999997,
+  "false_success": 0
+ },
+ "v1|ocr_blind": {
+  "n": 45,
+  "ok": 25,
+  "retries": 20,
+  "virtual": 158.99999999999997,
+  "false_success": 0
+ },
+ "v2|ocr_blind": {
+  "n": 45,
+  "ok": 25,
+  "retries": 60,
+  "virtual": 220.0,
+  "false_success": 0
+ }
+}

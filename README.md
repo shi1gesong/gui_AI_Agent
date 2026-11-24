@@ -6,16 +6,30 @@
 
 ```
 gui_AI_Agent/
-├── perception/          # 感知：截图(screenshot.py)、OCR(ocr_detector.py)、感知管线+DPI换算(screen_parser.py)
+├── perception/          # 感知：截图(screenshot.py)、OCR(ocr_detector.py)、感知管线+DPI换算(screen_parser.py)、
+│                        #        第6周：前台窗口/缓存/增量 OCR(perceiver_v2.py)、控件检测(ui_detector.py)
 ├── control/             # 控制：鼠标键盘(mouse_keyboard.py)、程序启动/关闭(app_manager.py)
 ├── agent/               # Agent：LLM接口、Plan-Act-Reflect框架、动作校验、grounding、执行器、
 │                        #        混合规划(planner.py)、端到端闭环(gui_agent.py)、命令行(cli.py)、基础任务(basic_tasks.py)
+│                        #        第6周 v2.0：任务分解(decomposer.py)、错误分类与重试(recovery.py)、效果校验(verifier.py)、
+│                        #        实时监控(monitor.py)、v2 闭环(agent_v2.py)、复杂任务(complex_tasks.py)
 ├── apps/mock_chat.py    # 模拟聊天程序（“发送消息”任务的测试目标）
 ├── data/                # 公开数据集预处理
 ├── finetune/            # 第5周：Qwen2-VL LoRA 微调（数据集、训练、推理、评测、HTTP 服务）
 ├── scripts/             # run_week5_wsl.sh：WSL2 一键 数据 → 基线 → 训练 → 评测 → 对比
 ├── tests/               # 1278 个测试用例（mock / Xvfb 虚拟屏幕 / Windows 真机 / 真实 LLM / 真实 OCR / 微型模型 / GPU）
 └── report/              # 各周实验报告与测试报告
+```
+
+## 快速开始（第6周 v2.0，默认引擎）
+
+```bat
+conda activate gui-agent-win
+cd %USERPROFILE%\Desktop\gui_AI_Agent
+python -m agent.cli --plan-only "打开计算器，然后给张三发送消息：好的，最后关闭计算器"   :: 看任务分解
+python -m agent.cli "给张三发送消息：明天开会"                                       :: v2 执行（--engine v1 用旧版）
+python -m agent.complex_tasks --repeat 3                                             :: 6 个复杂/干扰任务
+python -m agent.monitor                                                              :: 另开一个窗口实时查看最新任务
 ```
 
 ## 快速开始（第4周 v1.0）
@@ -42,6 +56,7 @@ python -m agent.basic_tasks --repeat 3                 :: 5 个基础任务批�
 | 第2-3周补充 | 523 个测试用例 + 20 个缺陷修复 | [report/week2-3_测试报告.md](report/week2-3_测试报告.md) |
 | 第4周 | 端到端 GUI 智能体 v1.0：闭环、CLI、5 个基础任务、469 个新用例 | [report/week4_README.md](report/week4_README.md)、[测试报告](report/week4_基础任务测试报告.md) |
 | 第5周 | Qwen2-VL-2B LoRA 微调、提示词对比、`--act vlm` 接入闭环、285 个新用例 | [report/week5_README.md](report/week5_README.md)、[对比报告](report/week5_微调效果对比报告.md) |
+| 第6周 | 系统 v2.0：复杂任务分解、错误分类+自动重试、效果校验、感知加速、实时监控、1260 次故障注入评测（v1 vs v2） | [report/week6_README.md](report/week6_README.md)、[鲁棒性测试报告](report/week6_鲁棒性测试报告.md) |
 
 ## 技术栈
 

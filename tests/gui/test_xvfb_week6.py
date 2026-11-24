@@ -124,9 +124,9 @@ def test_v1_fails_on_same_slow_loading(desktop):
 
 
 @pytest.mark.boundary
-def test_v2_complex_two_goals_real_window(desktop):
+def test_v2_complex_two_goals_real_window(desktop, xwin):
     """复合任务拆成两个目标，第二个目标复用已打开的窗口（切换而非重复启动）"""
-    agent = build_v2(desktop, LayoutOCR(desktop["layout"]))
+    agent = build_v2(desktop, LayoutOCR(desktop["layout"]), windows=xwin)
     r = agent.run("先给张三发送消息：第一条，然后给李四发送消息：第二条")
     assert [(m["to"], m["text"]) for m in sent(desktop["log"])] == [("张三", "第一条"), ("李四", "第二条")], \
         [(s["subtask"], s.get("error")) for s in r["steps"]]
@@ -137,7 +137,7 @@ def test_v2_complex_two_goals_real_window(desktop):
 def test_v2_postcondition_checked_on_real_screen(desktop):
     agent = build_v2(desktop, LayoutOCR(desktop["layout"]))
     r = agent.run("给王五发送消息：检查后置条件")
-    checks = [c for g in r["goals"] for c in g.get("postconditions", [])]
+    checks = [c for g in r["goals"] for c in g.get("post", {}).get("results", [])]
     assert r["success"] and checks and all(c["ok"] for c in checks)
 
 
@@ -259,7 +259,7 @@ def test_frame_cache_hits_on_static_screen(desktop):
 
 
 # ---------------- 真实 EasyOCR：v1 全屏 vs v2 前台窗口 ----------------
-@pytest.mark.performance
+@pytest.mark.functional
 @pytest.mark.ocr_real
 def test_real_easyocr_roi_faster_than_full_screen(desktop):
     pytest.importorskip("easyocr")

@@ -174,6 +174,7 @@ def main(argv=None):
         wanted = {t.strip().upper() for t in args.only.split(",")}
         tasks = [t for t in tasks if t.id in wanted]
 
+    print(f"实时查看执行状态（另开一个 Anaconda Prompt）：python -m agent.monitor --base {out_dir}")
     print(f"引擎 {args.engine}：即将执行 {len(tasks)} 个任务 × {args.repeat} 次，{args.countdown} 秒后开始，"
           "期间请不要操作鼠标键盘（紧急停止：把鼠标甩到屏幕任意一角）")
     time.sleep(max(0, args.countdown))
