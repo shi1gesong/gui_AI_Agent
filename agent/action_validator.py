@@ -43,6 +43,8 @@ _TYPE_TEXT_RE = re.compile(r"(?:输入|键入|填写|填入)(?!框|栏)[：:\s]*
 _KEY_RE = re.compile(r"按(?:下)?\s*(回车|enter|return|tab|esc|escape|退格|backspace|空格|space|win|windows|delete|删除|f5)",
                      re.IGNORECASE)
 _OPEN_RE = re.compile(r"^(?:打开|启动|运行)(.+)$")
+_FIELD_RE = re.compile(r"在(.+?)(?:中|里|内)?(?:输入|键入|填写|填入)(?!框|栏)")
+_SCROLL_CLICK_WORDS = ("顶部", "底部", "返回", "top", "bottom")
 
 
 def parse_screen_elements(screen_context: str) -> List[dict]:
@@ -99,6 +101,9 @@ class SubtaskIntent:
         km = _KEY_RE.search(self.subtask)
         self.key = KEY_ALIASES.get(km.group(1).lower()) if km else None
         self.scroll_intent = any(w in self.subtask for w in ("滚动", "滑动", "翻页"))
+        self.scroll_down = not any(w in self.subtask for w in ("向上", "往上", "上滚", "顶部"))
+        fm = _FIELD_RE.search(self.subtask) if self.type_intent else None
+        self.field = fm.group(1).strip() if fm else None  # “在微信搜索框输入张三” -> “微信搜索框”
         om = _OPEN_RE.match(self.subtask.strip())
         self.open_target = om.group(1).replace("默认", "").strip(" 的“”\"'") if om and not self.type_intent else None
         self.click_targets = self.quoted if (self.quoted and not self.type_intent) else []
@@ -129,8 +134,10 @@ def validate_action(subtask: str, action, elements: List[dict]) -> List[str]:
         reasons.append(f"子任务要求输入文字，action_type 应为 type，实际是 {a_type}")
     elif intent.key and not intent.type_intent and a_type != "key":
         reasons.append(f"子任务要求按 {intent.key} 键，action_type 应为 key，实际是 {a_type}")
-    elif intent.scroll_intent and a_type not in ("scroll", "click"):
-        reasons.append(f"子任务要求滚动，action_type 应为 scroll，实际是 {a_type}")
+    elif intent.scroll_intent and a_type != "scroll":
+        # 只有“返回顶部/底部”这类按钮可以用点击代替滚动；“下一页”是翻页，不是滚动
+        if not (a_type == "click" and any(w in target.lower() for w in _SCROLL_CLICK_WORDS)):
+            reasons.append(f"子任务要求滚动，action_type 应为 scroll，实际是 {a_type}「{target}」")
 
     if a_type == "click":
         if not target:
@@ -171,14 +178,19 @@ def fallback_action(subtask: str, elements: List[dict]) -> Optional[dict]:
                     {"action_type": "key", "target_text": "", "input_text": "enter"},
                 ]}
     if intent.type_intent and intent.expected_text:
-        field = next((e["text"] for e in elements
-                      if any(k in str(e.get("text", "")) for k in ("地址栏", "输入框", "搜索框", "框", "栏"))), "")
+        hit = find_element(intent.field, elements) if intent.field else None
+        field = hit["text"] if hit else next(
+            (e["text"] for e in elements
+             if any(k in str(e.get("text", "")) for k in ("地址栏", "输入框", "搜索框", "框", "栏"))), "")
         act = {"action_type": "type", "target_text": field, "input_text": intent.expected_text, "_fallback": True}
         if intent.key:
             act["follow_up"] = [{"action_type": "key", "target_text": "", "input_text": intent.key}]
         return act
     if intent.key:
         return {"action_type": "key", "target_text": "", "input_text": intent.key, "_fallback": True}
+    if intent.scroll_intent:
+        return {"action_type": "scroll", "target_text": "", "input_text": "",
+                "amount": -5 if intent.scroll_down else 5, "_fallback": True}
     if intent.click_targets:
         hit = find_element(intent.click_targets[0], elements)
         if hit:

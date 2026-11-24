@@ -78,6 +78,27 @@ class TestValidatorFunctional:
         assert fb["action_type"] == "type" and fb["input_text"] == "天气预报" and fb["target_text"] == "地址栏"
         assert fb["follow_up"] == [{"action_type": "key", "target_text": "", "input_text": "enter"}]
 
+    def test_real_qwen3_s12_fallback_targets_search_box(self):
+        """真机 qwen3:8b 实测：「在微信搜索框输入张三」三次都输出 click「搜索」；兜底应输入到「搜索」框"""
+        elems = [{"text": "搜索"}, {"text": "聊天"}, {"text": "通讯录"}]
+        fb = fallback_action("在微信搜索框输入张三", elems)
+        assert fb["action_type"] == "type" and fb["target_text"] == "搜索" and fb["input_text"] == "张三"
+
+    def test_real_qwen3_s04_next_page_is_not_scroll(self):
+        """真机 qwen3:8b 实测：「向下滚动页面查看更多结果」输出 click「下一页」，应被拦下并兜底为向下滚动"""
+        elems = [{"text": "搜索结果"}, {"text": "下一页"}]
+        r = validate_action("向下滚动页面查看更多结果", A("click", "下一页"), elems)
+        assert r and "滚动" in r[0]
+        fb = fallback_action("向下滚动页面查看更多结果", elems)
+        assert fb["action_type"] == "scroll" and fb["amount"] < 0
+
+    def test_scroll_up_fallback_positive(self):
+        assert fallback_action("向上滚动回到页面顶部", [])["amount"] > 0
+
+    def test_field_extraction(self):
+        assert SubtaskIntent("在微信搜索框输入张三").field == "微信搜索框"
+        assert SubtaskIntent("输入张三").field is None
+
     def test_executor_click_uses_bbox_center(self):
         ctl = RecController()
         assert ControllerExecutor(ctl)(A("click", "搜索"), ELEMS) == {"ok": True}

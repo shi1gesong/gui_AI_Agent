@@ -84,6 +84,24 @@ class TestSemanticFunctional:
         assert not ok and "不在屏幕元素中" in reasons[0]
 
 
+# 2026-11-24 Windows 真机 qwen3:8b 跑 20 条黄金用例，以下 2 条模型输出错误（每次重试都一样）
+REAL_QWEN3_ERRORS = {
+    "S04": {"action_type": "click", "target_text": "下一页", "input_text": ""},
+    "S12": {"action_type": "click", "target_text": "搜索", "input_text": ""},
+}
+
+
+@pytest.mark.functional
+@pytest.mark.parametrize("case_id", sorted(REAL_QWEN3_ERRORS))
+def test_real_qwen3_errors_corrected_by_agent(case_id):
+    """回放真实模型的错误输出（重复 3 次），修复后的 Agent 最终动作应通过语义评测"""
+    case = next(c for c in CASES if c["id"] == case_id)
+    agent = make_agent([REAL_QWEN3_ERRORS[case_id]] * 3)
+    action = agent.act(case["subtask"], screen_context(case["screen"]))
+    ok, reasons = judge(case, action)
+    assert ok, (action, reasons)
+
+
 @pytest.mark.functional
 class TestSemanticWeek3Regression:
     """第3周 demo 用例回放。假设模型每次重试都重复同样的错误（最坏情况），验证修复后的 Agent
