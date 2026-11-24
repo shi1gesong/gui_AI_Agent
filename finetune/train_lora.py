@@ -288,7 +288,7 @@ def main(argv=None):
     cfg = parse_args(argv)
     train_rows = load_rows(cfg.data_dir, "train", cfg.limit_train)
     val_rows = load_rows(cfg.data_dir, "val", cfg.limit_val)
-    print(f"[加载] 基座 {cfg.model}（首次运行会下载，国内可先 export HF_ENDPOINT=https://hf-mirror.com）")
+    print(f"[加载] 基座 {cfg.model}（首次运行会下载约 4.5GB；连不上 huggingface.co 时可 export HF_ENDPOINT=https://hf-mirror.com）")
     processor = load_processor(cfg.model, cfg.min_pixels, cfg.max_pixels)
     model = load_base_model(cfg.model, dtype=cfg.dtype, load_4bit=cfg.load_4bit)
     model = apply_lora(model, r=cfg.lora_r, alpha=cfg.lora_alpha, dropout=cfg.lora_dropout,

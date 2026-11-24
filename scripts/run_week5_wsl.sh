@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"   # 国内下载模型用镜像；能直连 HF 可以 export HF_ENDPOINT=
+# 默认直连 huggingface.co；在国内网络下可先 export HF_ENDPOINT=https://hf-mirror.com 再运行本脚本
 MODEL="${MODEL:-Qwen/Qwen2-VL-2B-Instruct}"
 OUT=outputs
 LOGS=$OUT/week5_logs
