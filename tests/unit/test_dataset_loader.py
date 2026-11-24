@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -173,7 +174,7 @@ class TestDatasetFunctional:
         assert s["task_id"] == "sess1/2024_translate" and s["source"] == "screenagent"
         assert s["instruction"] == "上网查找冯诺依曼的相关资料" and s["instruction_en"].startswith("Find")
         assert s["split"] == "train" and s["screen_size"] == [1024, 768]
-        assert s["screenshot_path"].endswith("images/2024.jpg")
+        assert Path(s["screenshot_path"]).parts[-2:] == ("images", "2024.jpg")  # Windows 下为反斜杠路径
 
     def test_screenagent_action_conversion(self, dl, root):
         make_screenagent(root, {"train/s/a.json": sa_item()})
