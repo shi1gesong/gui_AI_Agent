@@ -31,7 +31,7 @@ for p in (REPO_ROOT, REPO_ROOT / "agent", TESTS_DIR):
         sys.path.insert(0, str(p))
 
 CATEGORIES = ("functional", "boundary", "exception", "multi_resolution")
-ENV_MARKERS = ("xvfb", "real_device", "llm", "ocr_real")
+ENV_MARKERS = ("xvfb", "real_device", "llm", "ocr_real", "torch_model", "gpu")
 
 
 # --------------------------------------------------------------------------- #
@@ -114,8 +114,21 @@ def pytest_configure(config):
         "real_device": "需要 Windows 真机桌面（设置 GUI_AGENT_REAL_DEVICE=1）",
         "llm": "需要真实 Ollama 服务（设置 OLLAMA_BASE_URL）",
         "ocr_real": "需要真实安装 EasyOCR/PaddleOCR 及模型（设置 GUI_AGENT_REAL_OCR=1）",
+        "torch_model": "第5周：需要 torch + transformers + peft（CPU 即可），用随机初始化的微型 Qwen2-VL 跑真实训练/推理",
+        "gpu": "第5周：需要 GPU 与真实 Qwen2-VL 权重（设置 GUI_AGENT_VLM_MODEL，可选 GUI_AGENT_VLM_ADAPTER）",
     }.items():
         config.addinivalue_line("markers", f"{name}: {desc}")
+
+
+_TORCH_OK = None
+
+
+def _torch_stack() -> bool:
+    global _TORCH_OK
+    if _TORCH_OK is None:
+        from tiny_vlm import deps_available
+        _TORCH_OK = deps_available()
+    return _TORCH_OK
 
 
 def pytest_collection_modifyitems(config, items):
@@ -132,6 +145,10 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.skip(reason="真实 LLM 用例：设置 OLLAMA_BASE_URL 后运行"))
         if item.get_closest_marker("ocr_real") and not os.environ.get("GUI_AGENT_REAL_OCR"):
             item.add_marker(pytest.mark.skip(reason="真实 OCR 用例：设置 GUI_AGENT_REAL_OCR=1 后运行"))
+        if item.get_closest_marker("torch_model") and not _torch_stack():
+            item.add_marker(pytest.mark.skip(reason="未安装 torch/transformers/peft（Windows 端 gui-agent-win 正常跳过）"))
+        if item.get_closest_marker("gpu") and not os.environ.get("GUI_AGENT_VLM_MODEL"):
+            item.add_marker(pytest.mark.skip(reason="真实 VLM 用例：在 WSL2 设置 GUI_AGENT_VLM_MODEL 后运行"))
     if bad:
         raise pytest.UsageError("以下用例没有恰好一个类别标记：\n" + "\n".join(bad))
 

@@ -56,6 +56,13 @@ pytest tests\real\test_real_week4.py -m llm -v
 # 8) 第4周：Xvfb 虚拟屏幕 + 真实 EasyOCR 端到端（Linux，需 pip install easyocr 与中文字体）
 GUI_AGENT_REAL_OCR=1 pytest tests/gui/test_xvfb_e2e.py
 
+# 9) 第5周：微型 Qwen2-VL 真实训练/推理（需要 torch+transformers+peft，CPU 即可；没装时自动跳过）
+pytest -m torch_model
+
+# 10) 第5周：真实 Qwen2-VL + LoRA（WSL2 + GPU）
+GUI_AGENT_VLM_MODEL=Qwen/Qwen2-VL-2B-Instruct GUI_AGENT_VLM_ADAPTER=outputs/lora_qwen2vl_2b/best \
+  pytest tests/real/test_real_vlm.py -m gpu -v -s
+
 # 导出每个用例的结果为 CSV
 GUI_AGENT_RESULTS_CSV=results.csv pytest
 ```

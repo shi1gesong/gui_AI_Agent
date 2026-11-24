@@ -1,0 +1,99 @@
+{
+  "dropped": {
+    "没有可训练的动作": 1
+  },
+  "train": {
+    "samples": 808,
+    "sessions": 183,
+    "first_action": {
+      "click": 412,
+      "key": 101,
+      "type": 88,
+      "double_click": 80,
+      "move": 48,
+      "scroll": 32,
+      "right_click": 17,
+      "drag": 17,
+      "wait": 13
+    },
+    "all_actions": {
+      "click": 446,
+      "key": 235,
+      "type": 202,
+      "double_click": 85,
+      "wait": 64,
+      "move": 49,
+      "scroll": 40,
+      "drag": 23,
+      "right_click": 19
+    },
+    "avg_actions": 1.439,
+    "multi_action_ratio": 0.2351
+  },
+  "val": {
+    "samples": 82,
+    "sessions": 20,
+    "first_action": {
+      "click": 50,
+      "type": 9,
+      "key": 7,
+      "double_click": 6,
+      "move": 3,
+      "right_click": 3,
+      "drag": 2,
+      "scroll": 1,
+      "wait": 1
+    },
+    "all_actions": {
+      "click": 52,
+      "key": 19,
+      "type": 14,
+      "double_click": 6,
+      "move": 3,
+      "right_click": 3,
+      "drag": 2,
+      "scroll": 1,
+      "wait": 1
+    },
+    "avg_actions": 1.232,
+    "multi_action_ratio": 0.1585
+  },
+  "test": {
+    "samples": 282,
+    "sessions": 70,
+    "first_action": {
+      "click": 178,
+      "type": 36,
+      "key": 25,
+      "double_click": 14,
+      "scroll": 12,
+      "right_click": 8,
+      "move": 5,
+      "drag": 3,
+      "wait": 1
+    },
+    "all_actions": {
+      "click": 181,
+      "key": 69,
+      "type": 65,
+      "scroll": 14,
+      "double_click": 14,
+      "right_click": 8,
+      "drag": 6,
+      "move": 5,
+      "wait": 2
+    },
+    "avg_actions": 1.291,
+    "multi_action_ratio": 0.1879
+  },
+  "session_overlap": {
+    "train_val": 0,
+    "train_test": 0,
+    "val_test": 0
+  },
+  "source": "data_cache/screenagent_processed.jsonl",
+  "raw": 1173,
+  "kept": 1172,
+  "val_ratio": 0.1,
+  "seed": 42
+}
