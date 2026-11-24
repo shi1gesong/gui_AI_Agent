@@ -120,22 +120,39 @@ def test_device_drag_select_text(notepad):
     assert "Y" in read() and len(read()) < 52
 
 
+def _marker_line(text, marker):
+    for i, line in enumerate(text.split("\n")):
+        if marker in line:
+            return i
+    return None
+
+
 @pytest.mark.functional
-def test_device_scroll_changes_view(notepad, tmp_path):
-    from perception.screenshot import ScreenCapture
+def test_device_scroll_changes_view(notepad):
+    """滚动是否真的生效：在同一个屏幕位置点击并插入标记，比较滚动前后标记落在第几行。
+    （第一版用截图前后对比，在 2560x1440 大窗口下截到的是空白区域，前后都一样，判定不可靠）"""
     ctl, win, read = notepad
     ctl.type_text_unicode("\n".join(f"第{i}行" for i in range(200)))
     assert read().count("\n") == 199  # 先确认 200 行真的写进去了
+    x, y = win.left + 80, win.top + win.height // 2
+
     ctl.hotkey("ctrl", "home")
+    time.sleep(0.3)
+    ctl.click(x, y)
+    ctl.type_text("@")
+    before = _marker_line(read(), "@")
+    ctl.press_key("backspace")
+
+    ctl.hotkey("ctrl", "home")
+    time.sleep(0.3)
+    ctl.scroll(-10, x=x, y=y)
     time.sleep(0.5)
-    cap = ScreenCapture(save_dir=str(tmp_path))
-    # 截编辑区中部（避开 Win11 记事本顶部的标签栏和菜单栏）
-    region = (win.left + 20, win.top + win.height // 3, 300, 300)
-    before = cap.capture_region(*region, save=False)
-    ctl.scroll(-10, x=win.left + win.width // 2, y=win.top + win.height // 2)
-    time.sleep(0.5)
-    after = cap.capture_region(*region, save=False)
-    assert list(before.getdata()) != list(after.getdata())
+    ctl.click(x, y)
+    ctl.type_text("#")
+    after = _marker_line(read(), "#")
+    print(f"同一位置点击：滚动前在第 {before} 行，向下滚 10 格后在第 {after} 行")
+    assert before is not None and after is not None
+    assert after - before >= 10
 
 
 @pytest.mark.functional
