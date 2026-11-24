@@ -7,6 +7,7 @@
   - grounding：target_text → agent/grounding.py 的模糊匹配（容忍 OCR 空格、标点、全角半角差异）→ bbox 中心点。
     元素的 bbox 已由 perception/screen_parser.py 换算成鼠标逻辑坐标（DPI 缩放 ≠ 100% 时也能点准）
   - 每次执行返回 {"ok", "error", "detail"}，detail 记录实际点击坐标、匹配分数、打开的窗口等，写入运行轨迹
+2026-11-24 第5周：动作可直接带 point（VLM 输出的鼠标坐标），跳过 OCR grounding；新增 move / drag / 右键单击
 """
 import time
 from typing import Callable, List, Optional
@@ -43,6 +44,18 @@ class ControllerExecutor:
         x1, y1, x2, y2 = bbox
         return (int(x1) + int(x2)) // 2, (int(y1) + int(y2)) // 2
 
+    def _given_point(self, action: dict, key: str = "point"):
+        """第5周 --act vlm：VLM 直接给出鼠标坐标，跳过 OCR 文字匹配"""
+        pt = action.get(key)
+        if pt is None:
+            return None
+        if (not isinstance(pt, (list, tuple)) or len(pt) != 2
+                or not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in pt)):
+            raise ValueError(f"坐标格式错误: {pt!r}")
+        pt = (int(round(pt[0])), int(round(pt[1])))
+        self._detail.setdefault("points", []).append({"key": key, "point": list(pt)})
+        return pt
+
     def _locate(self, target: str, elements: List[dict]):
         hit = self.grounder.locate(target, elements)
         if hit is None:
@@ -56,15 +69,32 @@ class ControllerExecutor:
         target = str(action.get("target_text") or "")
         text = str(action.get("input_text") or "")
         if a_type in ("click", "double_click"):
-            pt = self._locate(target, elements)
+            pt = self._given_point(action) or self._locate(target, elements)
             if pt is None:
                 raise LookupError(f"屏幕上找不到点击目标「{target}」的坐标")
-            if a_type == "click":
-                self.controller.click(*pt)
-            else:
+            if a_type == "double_click":
                 self.controller.double_click(*pt)
+            elif action.get("button") in ("right", "middle"):
+                self.controller.click(*pt, button=action["button"])
+            else:
+                self.controller.click(*pt)
+        elif a_type == "move":
+            pt = self._given_point(action) or self._locate(target, elements)
+            if pt is None:
+                raise LookupError(f"屏幕上找不到「{target}」的坐标")
+            self.controller.move_to(*pt)
+        elif a_type == "drag":
+            start = self._given_point(action)
+            end = self._given_point(action, "end_point")
+            if start is None or end is None:
+                raise ValueError("拖拽需要 point 与 end_point 两个坐标")
+            self.controller.drag_to(start[0], start[1], end[0], end[1])
         elif a_type == "type":
-            if target:
+            pt = self._given_point(action)
+            if pt is not None:
+                self.controller.click(*pt)
+                self.sleep(0.2)
+            elif target:
                 # 指定了输入框却在屏幕上找不到时如实报错，不再“输入到当前焦点”后报成功
                 # （2026-11-24 真机 T4：输入框没被 OCR 识别出来，文字输到了别处，步骤却显示 ✓）
                 pt = self._locate(target, elements)
@@ -83,7 +113,7 @@ class ControllerExecutor:
             self.controller.hotkey(*keys)
         elif a_type == "scroll":
             amount = action.get("amount", self.default_scroll)
-            pt = self._locate(target, elements) if target else None
+            pt = self._given_point(action) or (self._locate(target, elements) if target else None)
             self.controller.scroll(amount, *(pt or (None, None)))
         elif a_type == "wait":
             sec = parse_wait_seconds(text or action.get("seconds"))
@@ -149,7 +179,9 @@ class DryRunExecutor:
         if not isinstance(action, dict) or action.get("_invalid"):
             return {"ok": False, "error": "动作未通过校验，未执行"}
         detail = {"dry_run": True}
-        if action.get("action_type") in ("click", "double_click"):
+        if action.get("point") is not None:
+            detail["point"] = list(action["point"])
+        elif action.get("action_type") in ("click", "double_click"):
             hit = self.grounder.locate(action.get("target_text", ""), elements or [])
             if hit is None:
                 return {"ok": False, "error": f"屏幕上找不到点击目标「{action.get('target_text')}」的坐标",

@@ -34,7 +34,16 @@ class AgentConfig:
     chat_log: Optional[str] = None
     run_dir: Optional[str] = None
     open_timeout: float = 10.0
+    vlm_url: Optional[str] = None   # 第5周 --act vlm：finetune/serve.py 的地址
+    vlm_ocr: bool = False           # vlm 模式下是否仍跑 OCR（默认不跑，省 4~6 秒/步）
     extra: dict = field(default_factory=dict)
+
+
+class NullOCR:
+    """vlm 模式不需要 OCR 元素：返回空列表，只保留截图"""
+
+    def detect(self, image_path: str):
+        return []
 
 
 class LazyOCR:
@@ -75,7 +84,8 @@ def build_agent(cfg: AgentConfig, log=print):
     windows = PyGetWindowProvider() if sys.platform.startswith("win") else None
     apps = AppManager(windows=windows, controller=controller, mock_chat_log=cfg.chat_log,
                       open_timeout=cfg.open_timeout)
-    perceiver = ScreenPerceiver(capture=capture, ocr=LazyOCR(cfg.ocr_engine), min_confidence=cfg.min_confidence,
+    use_ocr = cfg.act_mode != "vlm" or cfg.vlm_ocr
+    perceiver = ScreenPerceiver(capture=capture, ocr=LazyOCR(cfg.ocr_engine) if use_ocr else NullOCR(), min_confidence=cfg.min_confidence,
                                 region_fn=apps.screen_regions if windows is not None else None)
     executor = DryRunExecutor() if cfg.dry_run else ControllerExecutor(controller, app_manager=apps, settle_sec=0.3)
 
@@ -87,13 +97,19 @@ def build_agent(cfg: AgentConfig, log=print):
             kw["base_url"] = cfg.base_url
         brain = BaseGUIAgent(llm_mode="api", **kw)
 
+    vlm = None
+    if cfg.act_mode == "vlm":
+        from agent.vlm_client import DEFAULT_VLM_URL, VLMClient
+        vlm = VLMClient(cfg.vlm_url or DEFAULT_VLM_URL)
+
     planner_mode = cfg.planner if brain is not None else "rule"
-    act_mode = cfg.act_mode if brain is not None else "rule"
+    act_mode = cfg.act_mode if (brain is not None or cfg.act_mode == "vlm") else "rule"
     planner = HybridPlanner(mode=planner_mode,
                             rule=RulePlanner(chat_app=cfg.chat_app, app_resolver=apps.resolve_app),
                             llm_plan=brain.plan if brain else None)
     agent = GUIAgent(perceiver=perceiver, executor=executor, planner=planner, brain=brain,
                      act_mode=act_mode, reflect_mode=cfg.reflect_mode if brain else "rule",
-                     step_retries=cfg.step_retries, max_steps=cfg.max_steps, trace_dir=str(run_dir), log=log)
-    return agent, {"app_manager": apps, "controller": controller, "capture": capture, "perceiver": perceiver,
+                     step_retries=cfg.step_retries, max_steps=cfg.max_steps, trace_dir=str(run_dir), log=log,
+                     vlm=vlm)
+    return agent, {"vlm": vlm, "app_manager": apps, "controller": controller, "capture": capture, "perceiver": perceiver,
                    "run_dir": run_dir, "brain": brain}

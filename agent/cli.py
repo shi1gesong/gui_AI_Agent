@@ -9,7 +9,9 @@ GUI Agent v1.0 命令行入口（第4周）
     python -m agent.cli                              交互模式，逐条输入指令，输入 q 退出
 
 常用参数：
-    --act hybrid|llm|rule   动作决策方式（默认 hybrid：规则能推断就用规则，否则问 LLM）
+    --act hybrid|llm|rule|vlm 动作决策方式（默认 hybrid：规则能推断就用规则，否则问 LLM；
+                            vlm：第5周，需要看屏幕的步骤交给 WSL2 里的 Qwen2-VL+LoRA 服务直接输出坐标）
+    --vlm-url URL           vlm 服务地址（默认 http://localhost:8765，WSL2 中运行 python -m finetune.serve）
     --planner auto|rule|llm 规划方式（默认 auto：先匹配基础任务模板，匹配不上再问 LLM）
     --no-llm                不连接 Ollama（只能执行模板能识别的指令）
     --model qwen3:8b        Ollama 模型名；--think 打开 qwen3 思考模式（更慢）
@@ -33,7 +35,9 @@ def build_parser():
     ap.add_argument("--list-tasks", action="store_true", help="列出预置基础任务")
     ap.add_argument("--plan-only", action="store_true", help="只输出规划结果")
     ap.add_argument("--dry-run", action="store_true", help="感知 + 决策，但不执行动作")
-    ap.add_argument("--act", default="hybrid", choices=["hybrid", "llm", "rule"])
+    ap.add_argument("--act", default="hybrid", choices=["hybrid", "llm", "rule", "vlm"])
+    ap.add_argument("--vlm-url", default=None, help="--act vlm 时的 VLM 服务地址（默认 http://localhost:8765）")
+    ap.add_argument("--vlm-ocr", action="store_true", help="--act vlm 时仍运行 OCR（默认不运行）")
     ap.add_argument("--planner", default="auto", choices=["auto", "rule", "llm"])
     ap.add_argument("--no-llm", action="store_true")
     ap.add_argument("--model", default=None)
@@ -52,7 +56,8 @@ def make_config(args):
     from agent.factory import AgentConfig
     cfg = AgentConfig(planner=args.planner, act_mode=args.act, use_llm=not args.no_llm, think=bool(args.think),
                       ocr_engine=args.ocr, dry_run=args.dry_run, step_retries=args.retries,
-                      max_steps=args.max_steps, chat_app=args.chat_app, run_dir=args.run_dir)
+                      max_steps=args.max_steps, chat_app=args.chat_app, run_dir=args.run_dir,
+                      vlm_url=getattr(args, "vlm_url", None), vlm_ocr=bool(getattr(args, "vlm_ocr", False)))
     if args.model:
         cfg.model = args.model
     if args.ollama_url:

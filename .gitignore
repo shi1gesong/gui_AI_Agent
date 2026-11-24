@@ -5,3 +5,4 @@ screenshots/
 data_cache/
 runs/
 report/week4_results/*/runs/
+outputs/

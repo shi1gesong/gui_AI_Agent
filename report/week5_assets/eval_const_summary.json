@@ -1,0 +1,111 @@
+{
+  "n": 282,
+  "format_rate": 1.0,
+  "type_acc": 0.6312,
+  "first_action_acc": 0.0319,
+  "step_success": 0.0177,
+  "n_point": 208,
+  "click_hit@25": 0.0048,
+  "click_hit@50": 0.0433,
+  "click_hit@100": 0.0865,
+  "median_dist_px": 310.3,
+  "n_text": 65,
+  "text_acc": 0.0,
+  "n_key": 69,
+  "key_acc": 0.0,
+  "sec_mean": 0.0,
+  "per_type": {
+    "click": {
+      "n": 178,
+      "type_acc": 1.0,
+      "first_action_acc": 0.0506
+    },
+    "type": {
+      "n": 36,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    },
+    "key": {
+      "n": 25,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    },
+    "double_click": {
+      "n": 14,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    },
+    "scroll": {
+      "n": 12,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    },
+    "right_click": {
+      "n": 8,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    },
+    "move": {
+      "n": 5,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    },
+    "drag": {
+      "n": 3,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    },
+    "wait": {
+      "n": 1,
+      "type_acc": 0.0,
+      "first_action_acc": 0.0
+    }
+  },
+  "top_confusions": [
+    {
+      "gt": "type",
+      "pred": "click",
+      "n": 36
+    },
+    {
+      "gt": "key",
+      "pred": "click",
+      "n": 25
+    },
+    {
+      "gt": "double_click",
+      "pred": "click",
+      "n": 14
+    },
+    {
+      "gt": "scroll",
+      "pred": "click",
+      "n": 12
+    },
+    {
+      "gt": "right_click",
+      "pred": "click",
+      "n": 8
+    },
+    {
+      "gt": "move",
+      "pred": "click",
+      "n": 5
+    },
+    {
+      "gt": "drag",
+      "pred": "click",
+      "n": 3
+    },
+    {
+      "gt": "wait",
+      "pred": "click",
+      "n": 1
+    }
+  ],
+  "label": "const_baseline",
+  "prompt": null,
+  "adapter": null,
+  "split": "test",
+  "model": null
+}

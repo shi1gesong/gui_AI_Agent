@@ -24,6 +24,8 @@
   hybrid（默认）：规则优先，规则推断不出的子任务才调用 LLM —— 速度快、5 个基础任务稳定
   llm           ：每个子任务都调用 LLM（第3周方式 + 第4周扩展动作空间），用于对比实验
   rule          ：完全不用 LLM（Ollama 未启动时也能跑模板任务）
+  vlm（第5周）  ：不需要看屏幕的子任务仍用规则；需要看屏幕的交给多模态模型（Qwen2-VL + LoRA），
+                  模型看整张截图直接输出坐标，不依赖 OCR 文字匹配
 """
 import json
 import re
@@ -39,7 +41,7 @@ except ImportError:
     from action_validator import SubtaskIntent, fallback_action, needs_screen
     from planner import HybridPlanner, Plan
 
-ACT_MODES = ("hybrid", "llm", "rule")
+ACT_MODES = ("hybrid", "llm", "rule", "vlm")
 
 
 _PASSIVE_RE = re.compile(r"(查看|阅读|浏览|看到|看一下|获取)[^，。,;；]{0,12}(结果|内容|信息|页面)")
@@ -49,7 +51,8 @@ class GUIAgent:
     def __init__(self, perceiver, executor, planner: Optional[HybridPlanner] = None, brain=None,
                  act_mode: str = "hybrid", reflect_mode: str = "auto", step_retries: int = 1,
                  retry_wait: float = 1.0, max_steps: int = 20, stop_on_failure: bool = True,
-                 trace_dir: Optional[str] = None, sleep: Callable = time.sleep, log: Callable = print):
+                 trace_dir: Optional[str] = None, sleep: Callable = time.sleep, log: Callable = print,
+                 vlm=None):
         """
         perceiver: perception.screen_parser.ScreenPerceiver / StaticPerceiver（有 perceive() -> Observation）
         executor : agent.executor.ControllerExecutor / DryRunExecutor（callable(action, elements) -> {"ok",...}）
@@ -60,6 +63,8 @@ class GUIAgent:
             raise ValueError(f"不支持的决策模式 {act_mode!r}，可选 {ACT_MODES}")
         if act_mode == "llm" and brain is None:
             raise ValueError("llm 决策模式需要 brain（BaseGUIAgent）")
+        if act_mode == "vlm" and vlm is None:
+            raise ValueError("vlm 决策模式需要 vlm（agent.vlm_client.VLMClient）")
         if reflect_mode not in ("auto", "llm", "rule"):
             raise ValueError(f"不支持的反思模式 {reflect_mode!r}")
         self.perceiver = perceiver
@@ -68,6 +73,8 @@ class GUIAgent:
         self.planner = planner or HybridPlanner(mode="auto" if brain else "rule",
                                                 llm_plan=brain.plan if brain else None)
         self.act_mode = act_mode
+        self.vlm = vlm
+        self._instruction = ""
         self.reflect_mode = reflect_mode
         self.step_retries = max(0, int(step_retries))
         self.retry_wait = retry_wait
@@ -85,11 +92,16 @@ class GUIAgent:
 
     def decide(self, subtask: str, step: dict):
         """返回 (action, elements, source)"""
-        if self.act_mode in ("hybrid", "rule"):
+        if self.act_mode in ("hybrid", "rule", "vlm"):
             a = fallback_action(subtask, [])
             if a is not None and not needs_screen(a):
                 return a, [], "rule"
         obs = self._perceive(step)
+        if self.act_mode == "vlm":
+            a = self.vlm.act(subtask, self._instruction, obs)
+            if getattr(self.vlm, "last", None):
+                step["vlm"] = {k: v for k, v in self.vlm.last.items() if k != "actions"}
+            return a, obs.elements, "vlm"
         if self.act_mode == "rule" or self.brain is None:
             a = fallback_action(subtask, obs.elements)
             if a is None:
@@ -121,7 +133,7 @@ class GUIAgent:
                 if attempt < self.step_retries:
                     self.sleep(self.retry_wait)
                 continue
-            clean = {k: v for k, v in action.items() if k != "_rejected"}
+            clean = {k: v for k, v in action.items() if k not in ("_rejected", "vlm_raw")}
             rec.update(action=clean, source=source)
             if action.get("_rejected"):
                 rec["llm_rejected"] = len(action["_rejected"])
@@ -183,6 +195,7 @@ class GUIAgent:
         plan: 可选，跳过规划直接使用给定子任务
         """
         t0 = time.time()
+        self._instruction = instruction
         self.log(f"[指令] {instruction}")
         result = {"instruction": instruction, "act_mode": self.act_mode, "steps": []}
         try:
@@ -247,7 +260,11 @@ class GUIAgent:
 def _describe_action(a: dict) -> str:
     t = a.get("action_type")
     tgt, txt = a.get("target_text") or "", a.get("input_text") or ""
-    s = {"click": f"点击「{tgt}」", "double_click": f"双击「{tgt}」", "type": f"输入「{txt}」" + (f"（到「{tgt}」）" if tgt else ""),
+    pt = a.get("point")
+    if pt is not None and not tgt:
+        tgt = f"({pt[0]}, {pt[1]})"
+    s = {"click": f"{'右键' if a.get('button') == 'right' else ''}点击「{tgt}」", "double_click": f"双击「{tgt}」",
+         "move": f"移动到「{tgt}」", "drag": f"拖拽「{tgt}」→ {a.get('end_point')}", "type": f"输入「{txt}」" + (f"（到「{tgt}」）" if tgt else ""),
          "key": f"按键 {txt or tgt}", "hotkey": f"组合键 {txt or tgt}", "scroll": f"滚动 {a.get('amount', '')}",
          "open_app": f"打开「{tgt}」", "close_app": f"关闭「{tgt}」", "wait": f"等待 {txt} 秒", "done": "完成"}.get(t, str(t))
     if a.get("follow_up"):
