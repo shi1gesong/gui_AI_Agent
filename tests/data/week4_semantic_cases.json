@@ -1,0 +1,14 @@
+[
+  {"id": "W4-01", "subtask": "打开浏览器", "screen": ["回收站", "此电脑", "设置"], "expect_type": ["open_app"], "expect_target": ["浏览器", "Edge", "Chrome", "Microsoft Edge"]},
+  {"id": "W4-02", "subtask": "打开记事本", "screen": ["回收站", "此电脑"], "expect_type": ["open_app"], "expect_target": ["记事本", "notepad", "Notepad"]},
+  {"id": "W4-03", "subtask": "打开模拟聊天", "screen": ["回收站", "此电脑"], "expect_type": ["open_app"], "expect_target": ["模拟聊天", "聊天"]},
+  {"id": "W4-04", "subtask": "关闭计算器", "screen": ["计算器", "0", "="], "expect_type": ["close_app", "hotkey"], "expect_target": ["计算器", "Calculator"], "expect_input_any": ["alt+f4", "Alt+F4"]},
+  {"id": "W4-05", "subtask": "按 ctrl+l 聚焦地址栏", "screen": ["必应", "搜索"], "expect_type": ["hotkey"], "expect_input_any": ["ctrl+l", "Ctrl+L", "ctrl + l"]},
+  {"id": "W4-06", "subtask": "等待2秒", "screen": ["必应"], "expect_type": ["wait"]},
+  {"id": "W4-07", "subtask": "点击联系人“张三”", "screen": ["联系人", "张三", "李四", "王五", "消息内容", "发送"], "expect_type": ["click"], "expect_target": ["张三"]},
+  {"id": "W4-08", "subtask": "在“消息内容”框中输入“今晚7点开会”", "screen": ["张三", "当前聊天：张三", "消息内容", "发送"], "expect_type": ["type"], "expect_input": "今晚7点开会"},
+  {"id": "W4-09", "subtask": "点击“发送”", "screen": ["张三", "当前聊天：张三", "今晚7点开会", "发送"], "expect_type": ["click"], "expect_target": ["发送"]},
+  {"id": "W4-10", "subtask": "直接输入“天气预报”并按回车", "screen": ["必应", "搜索"], "expect_type": ["type"], "expect_input": "天气预报"},
+  {"id": "W4-11", "subtask": "双击“报告.docx”", "screen": ["回收站", "报告.docx", "此电脑"], "expect_type": ["double_click"], "expect_target": ["报告.docx"]},
+  {"id": "W4-12", "subtask": "打开文件“C:\\Users\\Public\\demo.txt”", "screen": ["回收站"], "expect_type": ["open_app"], "expect_target": ["C:\\Users\\Public\\demo.txt", "demo.txt"]}
+]

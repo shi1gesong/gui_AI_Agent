@@ -117,3 +117,123 @@ class ScriptedLLM:
         if isinstance(r, Exception):
             raise r
         return r
+
+
+# ---------------------------------------------------------------------------
+# 第4周：窗口 / 程序启动 / 控制器替身
+# ---------------------------------------------------------------------------
+class FakeWindow:
+    _next = 1000
+
+    def __init__(self, title, provider=None, closable=True):
+        FakeWindow._next += 1
+        self._hWnd = FakeWindow._next
+        self.title = title
+        self.provider = provider
+        self.closable = closable
+        self.activated = 0
+        self.isMinimized = False
+
+    def close(self):
+        if self.provider is not None and self.closable:
+            self.provider.wins = [w for w in self.provider.wins if w is not self]
+
+    def activate(self):
+        self.activated += 1
+        if self.provider is not None:
+            self.provider.active = self
+
+    def restore(self):
+        self.isMinimized = False
+
+    def __repr__(self):
+        return f"FakeWindow({self.title!r})"
+
+
+class FakeWindowProvider:
+    """模拟 pygetwindow：all_windows() / active_window()；launch_map 指定“启动某命令后出现什么窗口”"""
+
+    def __init__(self, titles=(), launch_map=None):
+        self.wins = []
+        self.active = None
+        for t in titles:
+            self.add(t)
+        self.launch_map = dict(launch_map or {})
+
+    def add(self, title, closable=True):
+        w = FakeWindow(title, self, closable)
+        self.wins.append(w)
+        self.active = w
+        return w
+
+    def all_windows(self):
+        return list(self.wins)
+
+    def active_window(self):
+        return self.active
+
+    def titles(self):
+        return [w.title for w in self.wins]
+
+
+class FakeLauncher:
+    """记录 spawn / startfile 调用；按 provider.launch_map 生成对应窗口"""
+
+    def __init__(self, provider=None, fail=None):
+        self.provider = provider
+        self.spawned, self.started = [], []
+        self.fail = fail
+
+    def _maybe_window(self, key):
+        if self.provider is None:
+            return
+        for k, title in self.provider.launch_map.items():
+            if k in key:
+                self.provider.add(title)
+                return
+
+    def spawn(self, cmd, **kw):
+        if self.fail:
+            raise self.fail
+        self.spawned.append(list(cmd))
+        self._maybe_window(" ".join(map(str, cmd)))
+
+    def startfile(self, target):
+        if self.fail:
+            raise self.fail
+        self.started.append(str(target))
+        self._maybe_window(str(target))
+
+
+class RecordingController:
+    """记录所有控制调用的 MouseKeyboardController 替身"""
+
+    def __init__(self, fail_on=None):
+        self.calls = []
+        self.fail_on = fail_on or {}
+
+    def _rec(self, name, *args):
+        if name in self.fail_on:
+            raise self.fail_on[name]
+        self.calls.append((name,) + args)
+
+    def click(self, x, y, button="left", clicks=1):
+        self._rec("click", x, y)
+
+    def double_click(self, x, y):
+        self._rec("double_click", x, y)
+
+    def type_text(self, text, interval=0.02):
+        self._rec("type_text", text)
+
+    def press_key(self, key):
+        self._rec("press_key", key)
+
+    def hotkey(self, *keys):
+        self._rec("hotkey", *keys)
+
+    def scroll(self, amount, x=None, y=None):
+        self._rec("scroll", amount, x, y)
+
+    def names(self):
+        return [c[0] for c in self.calls]

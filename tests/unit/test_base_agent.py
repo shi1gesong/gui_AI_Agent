@@ -245,8 +245,8 @@ class TestAgentBoundary:
     def test_act_rejects_target_not_on_screen(self):
         agent, _ = make_agent([J({"action_type": "click", "target_text": "Chrome", "input_text": ""})] * 3)
         action = agent.act("打开浏览器", SCREEN)
-        assert action["_fallback"] and action["action_type"] == "key" and action["input_text"] == "win"
-        assert action["follow_up"][0] == {"action_type": "type", "target_text": "", "input_text": "浏览器"}
+        # 第4周起兜底为 open_app（由 AppManager 直接启动），不再依赖开始菜单搜索
+        assert action["_fallback"] and action["action_type"] == "open_app" and action["target_text"] == "浏览器"
 
     def test_max_retries_zero_no_retry(self):
         agent, fake = make_agent([J({"action_type": "click", "target_text": "不存在", "input_text": ""})])

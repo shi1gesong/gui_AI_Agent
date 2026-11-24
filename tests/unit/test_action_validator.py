@@ -101,7 +101,7 @@ class TestValidatorFunctional:
 
     def test_executor_click_uses_bbox_center(self):
         ctl = RecController()
-        assert ControllerExecutor(ctl)(A("click", "搜索"), ELEMS) == {"ok": True}
+        assert ControllerExecutor(ctl)(A("click", "搜索"), ELEMS)["ok"] is True
         assert ctl.calls == [("click", (150, 115))]
 
     def test_executor_type_clicks_field_first(self):
@@ -116,8 +116,16 @@ class TestValidatorFunctional:
 
     def test_executor_runs_follow_up(self):
         ctl = RecController()
-        act = fallback_action("打开默认浏览器", ELEMS)
+        act = fallback_action("在地址栏输入'天气预报'并按下回车键", ELEMS)
         ControllerExecutor(ctl)(act, ELEMS)
+        assert ctl.calls == [("click", (300, 15)), ("type_text", ("天气预报",)), ("press_key", ("enter",))]
+
+    def test_executor_open_app_without_manager_uses_win_search(self):
+        """第4周：打开屏幕上没有的程序，兜底为 open_app；没有 AppManager 时退回 Win→输入→回车"""
+        ctl = RecController()
+        act = fallback_action("打开默认浏览器", ELEMS)
+        assert act["action_type"] == "open_app" and act["target_text"] == "浏览器"
+        ControllerExecutor(ctl, sleep=lambda s: None)(act, ELEMS)
         assert ctl.calls == [("press_key", ("win",)), ("type_text", ("浏览器",)), ("press_key", ("enter",))]
 
     def test_week3_task_end_to_end_with_real_controller_and_fake_gui(self, fake_gui, fake_clipboard):
@@ -130,11 +138,13 @@ class TestValidatorFunctional:
         plan = J({"subtasks": ["打开默认浏览器", "在浏览器的地址栏输入'天气预报'并按下回车键"]})
         act1, act2 = J(A("click", "设置")), J(A("click", "搜索"))
         reflect = J({"is_complete": True, "reason": "ok"})
-        agent = BaseGUIAgent(executor=ControllerExecutor(MouseKeyboardController()))
+        agent = BaseGUIAgent(executor=ControllerExecutor(MouseKeyboardController(), sleep=lambda s: None))
         agent.llm = LangChainLLMWrapper(inner_llm=ScriptedLLM([plan] + [act1] * 3 + [act2] * 3 + [reflect]))
         screen = "识别到的UI元素: [{'text': '搜索', 'bbox': [100,100,200,130]}, {'text': '设置', 'bbox': [300,50,380,80]}]"
         res = agent.run("打开浏览器并搜索天气预报", lambda: screen)
-        assert [c[0] for c in fake_gui.calls] == ["press", "hotkey", "press", "hotkey", "press"]
+        # 第4周：地址栏不在屏幕元素里时，用 ctrl+l 聚焦地址栏再输入（不再“输入到当前焦点”碰运气）
+        assert [c[0] for c in fake_gui.calls] == ["press", "hotkey", "press", "hotkey", "hotkey", "press"]
+        assert ("hotkey", ("ctrl", "l"), {}) in fake_gui.calls
         assert fake_clipboard.history[0] == "浏览器" and "天气预报" in fake_clipboard.history
         assert res["reflection"]["is_complete"] is True
 

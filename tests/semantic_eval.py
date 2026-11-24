@@ -13,11 +13,18 @@ import json
 from pathlib import Path
 
 CASES_PATH = Path(__file__).resolve().parent / "data" / "semantic_cases.json"
-VALID_TYPES = {"click", "type", "scroll", "key"}
+VALID_TYPES = {"click", "type", "scroll", "key", "double_click", "hotkey", "open_app", "close_app", "wait", "done"}
 
 
-def load_cases():
-    return json.loads(CASES_PATH.read_text(encoding="utf-8"))
+WEEK4_CASES_PATH = Path(__file__).resolve().parent / "data" / "week4_semantic_cases.json"
+
+
+def load_cases(path=None):
+    return json.loads(Path(path or CASES_PATH).read_text(encoding="utf-8"))
+
+
+def load_week4_cases():
+    return load_cases(WEEK4_CASES_PATH)
 
 
 def screen_context(elements):
@@ -30,6 +37,10 @@ def judge(case, action):
     reasons = []
     if not isinstance(action, dict) or action.get("_parse_error"):
         return False, ["输出无法解析为 JSON"]
+    if (action.get("action_type") == "hotkey" and "type" in case.get("expect_type", [])
+            and any(f.get("action_type") == "type" for f in action.get("follow_up", []))):
+        # 第4周：“在地址栏输入X”且地址栏不可见时，动作为 ctrl+l 聚焦后输入，按其中的输入动作评判
+        action = next(f for f in action["follow_up"] if f.get("action_type") == "type")
     a_type = action.get("action_type")
     target = (action.get("target_text") or "").strip()
     text = action.get("input_text") or ""
@@ -37,7 +48,7 @@ def judge(case, action):
         reasons.append(f"action_type 非法: {a_type!r}")
     elif a_type not in case["expect_type"]:
         reasons.append(f"动作类型错误: 期望 {case['expect_type']}，实际 {a_type}")
-    if a_type == "click":
+    if a_type in ("click", "double_click"):
         expected = case.get("expect_target") or case.get("expect_target_if_click")
         if target not in case["screen"]:
             reasons.append(f"点击目标「{target}」不在屏幕元素中")
@@ -48,6 +59,18 @@ def judge(case, action):
             reasons.append(f"输入目标错误: 期望 {case['expect_target']}，实际「{target}」")
         if case.get("expect_input") and case["expect_input"] not in text:
             reasons.append(f"输入内容错误: 期望包含「{case['expect_input']}」，实际「{text}」")
+    if a_type == "open_app":
+        expected = case.get("expect_target") or []
+        if expected and not any(e.lower() in target.lower() or target.lower() in e.lower() for e in expected if target):
+            reasons.append(f"打开目标错误: 期望 {expected}，实际「{target}」")
+    if a_type == "close_app":
+        expected = case.get("expect_target") or []
+        if expected and not any(e.lower() in target.lower() for e in expected):
+            reasons.append(f"关闭目标错误: 期望 {expected}，实际「{target}」")
+    if a_type == "hotkey" and case.get("expect_input_any"):
+        blob = (text + " " + target).lower().replace(" ", "")
+        if not any(k.lower().replace(" ", "") in blob for k in case["expect_input_any"]):
+            reasons.append(f"组合键错误: 期望 {case['expect_input_any']}，实际「{blob}」")
     if a_type == "key" and case.get("expect_input_any"):
         blob = text + " " + target
         if not any(k in blob for k in case["expect_input_any"]):

@@ -1,10 +1,10 @@
 [
-  {"id": "S01", "subtask": "打开默认浏览器", "screen": ["Google Chrome", "回收站", "此电脑", "设置"], "expect_type": ["click"], "expect_target": ["Google Chrome"]},
+  {"id": "S01", "subtask": "打开默认浏览器", "screen": ["Google Chrome", "回收站", "此电脑", "设置"], "expect_type": ["click", "open_app"], "expect_target": ["Google Chrome", "浏览器"]},
   {"id": "S02", "subtask": "在浏览器地址栏输入天气预报", "screen": ["地址栏", "新标签页", "书签"], "expect_type": ["type"], "expect_target": ["地址栏"], "expect_input": "天气预报"},
   {"id": "S03", "subtask": "按回车键确认搜索", "screen": ["地址栏", "天气预报"], "expect_type": ["key"], "expect_input_any": ["enter", "回车", "Enter", "return"]},
   {"id": "S04", "subtask": "向下滚动页面查看更多结果", "screen": ["搜索结果", "下一页"], "expect_type": ["scroll"]},
   {"id": "S05", "subtask": "点击“设置”按钮", "screen": ["搜索", "设置", "帮助"], "expect_type": ["click"], "expect_target": ["设置"]},
-  {"id": "S06", "subtask": "打开记事本", "screen": ["记事本", "画图", "计算器"], "expect_type": ["click"], "expect_target": ["记事本"]},
+  {"id": "S06", "subtask": "打开记事本", "screen": ["记事本", "画图", "计算器"], "expect_type": ["click", "open_app"], "expect_target": ["记事本"]},
   {"id": "S07", "subtask": "在记事本中输入Hello GUI Agent", "screen": ["文件", "编辑", "格式", "文本编辑区"], "expect_type": ["type"], "expect_input": "Hello GUI Agent"},
   {"id": "S08", "subtask": "点击“文件”菜单", "screen": ["文件", "编辑", "查看"], "expect_type": ["click"], "expect_target": ["文件"]},
   {"id": "S09", "subtask": "点击“另存为”", "screen": ["新建", "打开", "保存", "另存为"], "expect_type": ["click"], "expect_target": ["另存为"]},

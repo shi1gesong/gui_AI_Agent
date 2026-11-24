@@ -24,10 +24,10 @@ from langchain_core.language_models.llms import LLM
 from langchain_core.prompts import PromptTemplate
 
 try:  # 以包方式导入（agent.base_agent）
-    from .action_validator import fallback_action, parse_screen_elements, validate_action
+    from .action_validator import fallback_action, normalize_action, parse_screen_elements, validate_action
     from .llm_interface import BaseLLMInterface, build_llm_interface
 except ImportError:  # 直接运行本文件 / 把 agent/ 加入 sys.path 时
-    from action_validator import fallback_action, parse_screen_elements, validate_action
+    from action_validator import fallback_action, normalize_action, parse_screen_elements, validate_action
     from llm_interface import BaseLLMInterface, build_llm_interface
 
 
@@ -67,14 +67,21 @@ ACTING_PROMPT = PromptTemplate.from_template(
 当前屏幕上识别到的UI元素信息如下（文字内容与坐标）：
 {screen_context}
 
-请给出下一步应该执行的具体动作。action_type字段必须是下面四个词中的恰好一个：
-- click：点击某个元素。target_text 必须从上面的屏幕元素中原样选取，且必须与子任务目标相关
-- type：输入文本。凡是子任务要求“输入/填写”内容的都用 type，input_text 填要输入的完整内容
+请给出下一步应该执行的具体动作。action_type字段必须是下面这些词中的恰好一个：
+- click：单击某个元素。target_text 必须从上面的屏幕元素中原样选取，且必须与子任务目标相关
+- double_click：双击某个元素（如桌面图标、文件），target_text 同 click
+- type：输入文本。凡是子任务要求“输入/填写”内容的都用 type，input_text 填要输入的完整内容，
+  target_text 填要先点击的输入框文字（没有就留空字符串，表示输入到当前焦点）
+- key：按下单个功能键，input_text 填键名（enter/tab/esc/backspace/win 等）
+- hotkey：组合键，input_text 写成 ctrl+l、alt+f4 这样的格式
 - scroll：滚动屏幕
-- key：按下功能键，input_text 填键名（enter/tab/esc/backspace/win 等）
+- open_app：打开程序或文件，target_text 填程序名（浏览器/记事本/计算器…）或文件路径
+- close_app：关闭程序窗口，target_text 填程序名或窗口标题
+- wait：等待界面加载，input_text 填秒数
+- done：子任务已经完成，无需操作
 
 规则：
-- 如果子任务要打开某个应用，但屏幕元素里没有该应用，不要点击无关元素，改为输出 key + win（打开开始菜单搜索）
+- 子任务要打开某个应用而屏幕元素里没有它时，用 open_app，不要点击无关元素
 - 不要点击与子任务无关的元素
 
 示例输出（点击屏幕上的“确定”按钮）：
@@ -84,7 +91,7 @@ ACTING_PROMPT = PromptTemplate.from_template(
 {{"action_type": "type", "target_text": "搜索框", "input_text": "天气预报"}}
 {feedback}
 现在请只输出一个JSON对象，不要输出多余文字：
-{{"action_type": "click/type/scroll/key 中的一个", "target_text": "要操作的目标文字", "input_text": "type 时填写输入内容，key 时填写键名，否则留空字符串"}}
+{{"action_type": "上面动作类型中的一个", "target_text": "要操作的目标文字", "input_text": "type 时填写输入内容，key/hotkey 时填写键名，wait 时填秒数，否则留空字符串"}}
 """
 )
 
@@ -93,7 +100,11 @@ REFLECTING_PROMPT = PromptTemplate.from_template(
 已执行的子任务与动作记录（含是否真正执行成功）：
 {action_history}
 
-请判断当前任务是否已经完成。严格按以下JSON格式输出：
+请判断当前任务是否已经完成。判断规则：
+1. 只看任务目标本身要求的操作。目标要求的操作都已真正执行成功，就算完成。
+2. 不要追加任务目标没有要求的事情。例如“搜索天气预报”在搜索结果页出现后就已完成，不需要“查看/阅读结果”。
+3. 有子任务未执行或执行失败时，判为未完成。
+严格按以下JSON格式输出：
 {{"is_complete": true/false, "reason": "简要说明判断依据", "next_action_suggestion": "若未完成，建议下一步做什么"}}
 """
 )
@@ -167,6 +178,7 @@ class BaseGUIAgent:
                 action = action[0] if action and isinstance(action[0], dict) else {"_parse_error": True, "raw": raw}
             reasons = validate_action(subtask, action, elements)
             if not reasons:
+                action = normalize_action(subtask, action)
                 break
             rejected.append({"output": action, "reasons": reasons})
             feedback = ("\n注意：你上一次的输出 " + json.dumps(action, ensure_ascii=False)
