@@ -15,6 +15,7 @@
     python -m agent.basic_tasks --repeat 3      # 各跑 3 次，统计成功率
     python -m agent.basic_tasks --act llm       # 每个子任务都让 LLM 决策（对比实验）
     python -m agent.basic_tasks --no-llm        # 不连 Ollama，纯规则
+    python -m agent.basic_tasks --engine v1     # 第6周起默认 v2，加这个参数用第4周 v1.0 对比
 结果写入 report/week4_results/<时间>/：results.csv、summary.md、每次运行的 trace.json 与截图。
 """
 import argparse
@@ -215,6 +216,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="第4周 5 个基础任务批量测试（会真实操作鼠标键盘）")
     ap.add_argument("--only", default="", help="只跑部分任务，如 T1,T4")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--engine", default="v2", choices=["v1", "v2"], help="第6周起默认 v2；v1 为第4周闭环")
     ap.add_argument("--act", default="hybrid", choices=["hybrid", "llm", "rule"])
     ap.add_argument("--planner", default="auto", choices=["auto", "rule", "llm"])
     ap.add_argument("--no-llm", action="store_true")
@@ -228,7 +230,7 @@ def main(argv=None):
     out_dir = Path(args.out) if args.out else REPO_ROOT / "report" / "week4_results" / stamp
     chat_log = out_dir / "mock_chat.jsonl"
     cfg = AgentConfig(planner=args.planner, act_mode=args.act, use_llm=not args.no_llm, ocr_engine=args.ocr,
-                      chat_log=str(chat_log), run_dir=str(out_dir / "runs" / "init"))
+                      chat_log=str(chat_log), run_dir=str(out_dir / "runs" / "init"), engine=args.engine)
     if args.model:
         cfg.model = args.model
     agent, comp = build_agent(cfg)
@@ -252,7 +254,7 @@ def main(argv=None):
             results.append(r)
             time.sleep(1.0)
     rows = summarize(results)
-    meta = {"time": stamp, "act_mode": agent.act_mode, "planner": agent.planner.mode,
+    meta = {"time": stamp, "act_mode": f"{args.engine} / {agent.act_mode}", "planner": agent.planner.mode,
             "model": cfg.model if cfg.use_llm else "无", "ocr": args.ocr, "repeat": args.repeat}
     print("\n" + write_report(rows, out_dir, meta))
     print(f"\n结果目录: {out_dir}")
