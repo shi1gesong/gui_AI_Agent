@@ -18,7 +18,7 @@
 |---|---|
 | 微调数据集构建脚本 | `finetune/build_dataset.py`（ScreenAgent → train/val/test） |
 | LoRA 微调代码 | `finetune/train_lora.py`、`finetune/modeling.py`、`finetune/collator.py` |
-| 微调后的模型权重 | WSL2 本地 `outputs/lora_qwen2vl_2b/best/`（LoRA 适配器，约 70MB，不提交到 git） |
+| 微调后的模型权重 | 本机 `outputs/lora_qwen2vl_2b/best/`（第 2 个 epoch 的 LoRA 适配器，1846 万参数，不提交到 git） |
 | 微调效果对比分析报告 | [week5_微调效果对比报告.md](week5_微调效果对比报告.md) |
 | 接入 Agent | `agent/vlm_client.py` + `finetune/serve.py`，CLI `--act vlm` |
 | 一键运行脚本 | `scripts/run_week5_wsl.sh` |
@@ -119,9 +119,9 @@ WSL2 监听 0.0.0.0:8765，Windows 通过 localhost:8765 访问（WSL2 默认转
 | 微型 Qwen2-VL 真实训练 → 保存 → 加载 → 生成 → 解析 → 打分 | ✅ | CPU 上跑通；训练后能逐字生成目标动作并被评为完全正确 |
 | `--act vlm` 闭环（模拟桌面） | ✅ | T4 发送消息成功；DPI 100%/125%/150%/200%、分辨率 1366×768 ~ 3840×2160 全部成功 |
 | 常数基线（ScreenAgent 测试集 282 条） | ✅ | 首动作正确率 3.2%，点击命中@50px 4.3%，作为下限参照 |
-| 基座零样本 × 3 种提示词 | ⏳ | 需在 WSL2 GPU 上运行 `scripts/run_week5_wsl.sh` |
-| LoRA 微调 + 微调后评测 | ⏳ | 同上 |
-| GPU 真实用例（`pytest -m gpu`） | ⏳ | 10 个，同上 |
+| 基座零样本 × 3 种提示词 | ✅ | 格式合格率 v0 2.1% → v1 **82.6%**；v2 加示例反而 3.9% |
+| LoRA 微调 + 微调后评测 | ✅ | 25 分钟训练；首动作正确率 8.5% → **44.7%**，点击命中@50px 3.9% → **38.5%**，格式 **100%** |
+| GPU 真实用例（`pytest -m gpu`） | ⏳ | 10 个：首轮 1 通过、9 个因测试配置缺陷报错（已修复），待补跑 |
 
 ## 五、问题排查记录
 
@@ -130,16 +130,18 @@ WSL2 监听 0.0.0.0:8765，Windows 通过 localhost:8765 访问（WSL2 默认转
 | 模型输出 `{"action": "key", "keys": ["enter"]}` 被解析成空 | 解析器先找 `[`，取到了对象里面的 `["enter"]` | 看 `[` 和 `{` 谁先出现，决定按数组还是对象解析 |
 | 使用 v2_fewshot 提示词时报 `KeyError: '"action"'` | 示例里的 JSON 花括号被 `str.format` 当成占位符 | 示例文字中的花括号转义 |
 | `evaluate --max-pixels 12544` 报 min_pixels > max_pixels | 只调小了上限，下限仍是默认值 200704 | 未指定下限时取 min(默认下限, 上限)；新增 `--min-pixels` |
+| 本机 `pytest -m gpu` 9 个用例 setup 报 `cv2.__spec__ is None` | WSL 环境没有 opencv 时，测试配置放进 sys.modules 的 cv2 替身没有 `__spec__`，transformers 导入时调用 find_spec 报错（云端装了 opencv，没暴露） | 替身补上 `__spec__`；在云端模拟无 opencv 环境复现并验证修复 |
+| 本机运行脚本报 `pipefail: invalid option`、找不到 C 编译器、连不上 hf-mirror、训练进度不显示 | Windows checkout 转 CRLF；新版 peft 顺带导入 bitsandbytes；镜像只适合国内；Python 经管道整块缓冲 | `.gitattributes` 强制 LF；脚本自动处理 bitsandbytes；默认直连 HF；`PYTHONUNBUFFERED=1` |
 | 微型模型用 LoRA 记不住整句目标 | 隐藏维只有 64，LoRA 容量太小（与真实 2B 模型无关） | “能逐字生成”这个端到端用例改用全参数训练微型模型；LoRA 用例只验证损失下降、挂载位置、保存/加载一致 |
 
-以上 3 个缺陷都是新写的测试用例发现的。
+前 3 个缺陷由新写的测试用例发现；cv2 替身缺陷由本机 GPU 用例发现。
 
 ## 六、已知局限
 
 1. **领域差异**：ScreenAgent 是 1024×768 的 Linux/Windows 混合桌面，本机是 2560×1440 Windows 11。归一化坐标能解决分辨率问题，界面风格的差异要看真机效果。
 2. **截图保真度**：2560×1440 截图会被缩到 max_pixels（约 80 万像素）以内，小图标可能看不清；可以调大 `--max-pixels`，代价是速度和显存。
 3. **数据量**：808 条训练样本偏少。如果效果不理想，下一步可以用第4周的模拟桌面和真机轨迹自动生成本项目领域的训练数据。
-4. 本周的模型结果需要在本机 GPU 上跑出来；云端没有 GPU，也访问不了 HuggingFace，云端只验证了管线的正确性。
+4. few-shot 变差的原因目前是推测（见对比报告 2.1），需要看逐条输出确认。
 
 ## 七、本机运行步骤
 
