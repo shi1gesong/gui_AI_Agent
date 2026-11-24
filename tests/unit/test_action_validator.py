@@ -142,7 +142,9 @@ class TestValidatorFunctional:
         agent.llm = LangChainLLMWrapper(inner_llm=ScriptedLLM([plan] + [act1] * 3 + [act2] * 3 + [reflect]))
         screen = "识别到的UI元素: [{'text': '搜索', 'bbox': [100,100,200,130]}, {'text': '设置', 'bbox': [300,50,380,80]}]"
         res = agent.run("打开浏览器并搜索天气预报", lambda: screen)
-        assert [c[0] for c in fake_gui.calls] == ["press", "hotkey", "press", "hotkey", "press"]
+        # 第4周：地址栏不在屏幕元素里时，用 ctrl+l 聚焦地址栏再输入（不再“输入到当前焦点”碰运气）
+        assert [c[0] for c in fake_gui.calls] == ["press", "hotkey", "press", "hotkey", "hotkey", "press"]
+        assert ("hotkey", ("ctrl", "l"), {}) in fake_gui.calls
         assert fake_clipboard.history[0] == "浏览器" and "天气预报" in fake_clipboard.history
         assert res["reflection"]["is_complete"] is True
 

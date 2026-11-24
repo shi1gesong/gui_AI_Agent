@@ -145,7 +145,7 @@ nodeid,module,category,env,status
 "tests/unit/test_action_space.py::TestActionSpaceBoundary::test_hotkey_needs_modifier",test_action_space.py,boundary,mock,passed
 "tests/unit/test_action_space.py::TestActionSpaceBoundary::test_open_with_quote",test_action_space.py,boundary,mock,passed
 "tests/unit/test_action_space.py::TestActionSpaceBoundary::test_single_key_not_hotkey",test_action_space.py,boundary,mock,passed
-"tests/unit/test_action_space.py::TestActionSpaceBoundary::test_type_into_missing_field_types_into_focus",test_action_space.py,boundary,mock,passed
+"tests/unit/test_action_space.py::TestActionSpaceBoundary::test_type_into_missing_field_fails_instead_of_typing_elsewhere",test_action_space.py,boundary,mock,passed
 "tests/unit/test_action_space.py::TestActionSpaceBoundary::test_wait_capped",test_action_space.py,boundary,mock,passed
 "tests/unit/test_action_space.py::TestActionSpaceBoundary::test_wait_intent_default_one_second",test_action_space.py,boundary,mock,passed
 "tests/unit/test_action_space.py::TestActionSpaceBoundary::test_wait_intent_ms",test_action_space.py,boundary,mock,passed
@@ -223,6 +223,8 @@ nodeid,module,category,env,status
 "tests/unit/test_action_space.py::TestActionSpaceMultiResolution::test_fallback_independent_of_resolution[1920-1080]",test_action_space.py,multi_resolution,mock,passed
 "tests/unit/test_action_space.py::TestActionSpaceMultiResolution::test_fallback_independent_of_resolution[2560-1440]",test_action_space.py,multi_resolution,mock,passed
 "tests/unit/test_action_space.py::TestActionSpaceMultiResolution::test_fallback_independent_of_resolution[3840-2160]",test_action_space.py,multi_resolution,mock,passed
+"tests/unit/test_action_space.py::TestAddressBarFallback::test_address_bar_not_visible_uses_ctrl_l",test_action_space.py,functional,mock,passed
+"tests/unit/test_action_space.py::TestAddressBarFallback::test_address_bar_visible_clicks_it",test_action_space.py,functional,mock,passed
 "tests/unit/test_action_validator.py::TestValidatorBoundary::test_fallback_none_when_no_intent",test_action_validator.py,boundary,mock,passed
 "tests/unit/test_action_validator.py::TestValidatorBoundary::test_find_element_empty_target",test_action_validator.py,boundary,mock,passed
 "tests/unit/test_action_validator.py::TestValidatorBoundary::test_find_element_substring",test_action_validator.py,boundary,mock,passed
@@ -601,9 +603,11 @@ nodeid,module,category,env,status
 "tests/unit/test_gui_agent.py::TestGUIAgentMultiResolution::test_unscaled_coordinates_would_miss",test_gui_agent.py,multi_resolution,mock,passed
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_console_foreground_not_used_as_include_region",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_console_text_filtered_from_observation",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_field_not_recognized_step_fails_honestly",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_long_console_line_not_grounded_without_region_filter",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_with_console_and_misread_placeholder",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_with_console_exact_placeholder",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_without_autofocus_clicks_label",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_env_priority",test_llm_interface.py,boundary,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_reads_env",test_llm_interface.py,boundary,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_trailing_slash",test_llm_interface.py,boundary,mock,passed

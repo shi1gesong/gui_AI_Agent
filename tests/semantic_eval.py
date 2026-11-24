@@ -37,6 +37,10 @@ def judge(case, action):
     reasons = []
     if not isinstance(action, dict) or action.get("_parse_error"):
         return False, ["输出无法解析为 JSON"]
+    if (action.get("action_type") == "hotkey" and "type" in case.get("expect_type", [])
+            and any(f.get("action_type") == "type" for f in action.get("follow_up", []))):
+        # 第4周：“在地址栏输入X”且地址栏不可见时，动作为 ctrl+l 聚焦后输入，按其中的输入动作评判
+        action = next(f for f in action["follow_up"] if f.get("action_type") == "type")
     a_type = action.get("action_type")
     target = (action.get("target_text") or "").strip()
     text = action.get("input_text") or ""

@@ -31,7 +31,8 @@ class SimDesktop:
         self.ocr_calls = 0
         self.hide_contacts = set()
         self.console = []                 # [(文字, bbox)]：始终可见的命令行窗口内容（Agent 自己打印的日志）
-        self.placeholder_text = "消息内容"  # OCR 读到的输入框占位文字（可模拟识别错字）
+        self.placeholder_text = "消息内容"  # OCR 读到的输入框标签文字（可模拟识别错字；None = 没识别出来）
+        self.autofocus = True              # 与 apps/mock_chat.py 一致：选中联系人后输入框自动获得焦点
 
     # ---------------- 启动器 ----------------
     def spawn(self, cmd, **kw):
@@ -70,8 +71,10 @@ class SimDesktop:
              if n not in self.hide_contacts]
         w.append(("当前聊天：" + self.chat["selected"] if self.chat["selected"] else "请选择联系人",
                   [ox + 230, oy + 10, ox + 600, oy + 50]))
-        if not self.chat["focus"] or self.chat["text"]:
-            w.append((self.chat["text"] or self.placeholder_text, [ox + 230, oy + 500, ox + 700, oy + 540]))
+        if self.placeholder_text:  # 输入框左侧的“消息内容”标签（None 表示 OCR 没识别出来）
+            w.append((self.placeholder_text, [ox + 230, oy + 500, ox + 330, oy + 540]))
+        if self.chat["text"]:
+            w.append((self.chat["text"], [ox + 340, oy + 500, ox + 700, oy + 540]))
         w.append(("发送", [ox + 720, oy + 500, ox + 800, oy + 540]))
         return w
 
@@ -125,7 +128,7 @@ class SimDesktop:
         if self._active() == MOCK_CHAT_TITLE and self.chat is not None:
             if hit in CHAT_CONTACTS:
                 self.chat["selected"] = hit
-                self.chat["focus"] = False
+                self.chat["focus"] = self.autofocus  # 选中联系人后光标自动进入输入框
             elif hit == "发送":
                 self._chat_send()
             elif hit is not None and (hit == self.placeholder_text or hit == self.chat["text"]):

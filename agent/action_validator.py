@@ -346,7 +346,13 @@ def fallback_action(subtask: str, elements: List[dict]) -> Optional[dict]:
         field = ""
         if intent.field and not intent.direct_type:
             hit = find_element(intent.field, elements)
-            # 没找到时保留输入框名：needs_screen() 据此先截图识别；执行器找不到坐标时直接输入到当前焦点
+            if hit is None and "地址栏" in intent.field:
+                # 浏览器地址栏通常没有可识别的文字：用 ctrl+l 聚焦后输入
+                follow = [{"action_type": "type", "target_text": "", "input_text": intent.expected_text}]
+                if intent.key:
+                    follow.append({"action_type": "key", "target_text": "", "input_text": intent.key})
+                return _fb("hotkey", "", "ctrl+l", follow_up=follow)
+            # 没找到时保留输入框名：needs_screen() 据此先截图识别；仍找不到时执行器报错（不会输入到别处）
             field = hit["text"] if hit else intent.field
         elif not intent.direct_type:
             field = next((e["text"] for e in elements

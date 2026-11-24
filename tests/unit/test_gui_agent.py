@@ -318,6 +318,22 @@ class TestRealDeviceRegressionT4:
         r = run_task(agent, task("T4", ctx), ctx)
         assert r["success"] and sim.typed_to_nowhere == []
 
+    def test_field_not_recognized_step_fails_honestly(self, tmp_path):
+        """第二轮真机：EasyOCR 没识别出输入框文字。输入步骤必须报失败，而不是把文字输到别处再报 ✓"""
+        agent, sim, ctx = make(tmp_path, step_retries=1)
+        sim.add_console(CONSOLE_LINES)
+        sim.placeholder_text = None
+        r = run_task(agent, task("T4", ctx), ctx)
+        step = next(s for s in r["steps"] if "消息内容" in s["subtask"])
+        assert r["success"] is False and step["ok"] is False and "找不到输入框" in step["error"]
+        assert sim.typed_to_nowhere == [] and not any(c[0] == "type_text" for c in sim.calls)
+
+    def test_t4_without_autofocus_clicks_label(self, tmp_path):
+        """即使程序不自动聚焦输入框，点击“消息内容”标签也能把焦点移到输入框"""
+        agent, sim, ctx = make(tmp_path)
+        sim.autofocus = False
+        assert run_task(agent, task("T4", ctx), ctx)["success"]
+
     def test_console_foreground_not_used_as_include_region(self, tmp_path):
         agent, sim, ctx = make(tmp_path)
         sim.spawn(["python", "mock_chat.py"])

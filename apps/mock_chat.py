@@ -3,7 +3,7 @@ GUI Agent 模拟聊天程序（第4周基础任务“发送消息”的测试目
 
 为什么不直接用微信：发送消息是对外的、不可撤回的操作，测试时给真实联系人发消息不合适；
 真实聊天软件的界面也会随版本变化，不利于反复对比实验。这个模拟程序界面元素与常见聊天软件一致：
-左侧联系人列表、顶部当前聊天对象、底部消息输入框（占位文字“消息内容”）和“发送”按钮，
+左侧联系人列表、顶部当前聊天对象、底部“消息内容”标签 + 输入框和“发送”按钮，
 所有元素都是可被 OCR 识别的中文文字。每发送一条消息就把 {"to","text","time"} 追加写入日志，
 基础任务测试读取日志客观判定“是否把正确的消息发给了正确的人”。
 
@@ -70,10 +70,14 @@ class MockChatApp:
 
         bottom = tk.Frame(right, bg="#f5f5f5")
         bottom.pack(fill="x", padx=16, pady=16)
-        self.entry = tk.Entry(bottom, font=big, fg="#666666", relief="solid", bd=1)
-        self.entry.insert(0, PLACEHOLDER)
+        # 输入框左侧的标签“消息内容”：黑色文字，OCR 能稳定识别；点击标签等同于点击输入框。
+        # （2026-11-24 真机：EasyOCR 识别不出输入框里灰色的占位文字，Agent 找不到输入框）
+        self.field_label = tk.Label(bottom, text=PLACEHOLDER, font=big, bg="#f5f5f5", fg="black", padx=6,
+                                    cursor="xterm")
+        self.field_label.pack(side="left", padx=(0, 8))
+        self.field_label.bind("<Button-1>", lambda e: self.entry.focus_set())
+        self.entry = tk.Entry(bottom, font=big, fg="black", relief="solid", bd=1)
         self.entry.pack(side="left", fill="x", expand=True, ipady=8)
-        self.entry.bind("<FocusIn>", self._clear_placeholder)
         self.entry.bind("<Return>", lambda e: self.send())
         self.send_btn = tk.Button(bottom, text="发送", font=big, command=self.send, padx=18, bg="#07c160", fg="white")
         self.send_btn.pack(side="left", padx=(12, 0))
@@ -81,25 +85,18 @@ class MockChatApp:
         self.status.pack(fill="x")
         root.after(500, self.dump_layout)
 
-    def _clear_placeholder(self, _e=None):
-        if self.entry.get() == PLACEHOLDER and self.entry.cget("fg") == "#666666":
-            self.entry.delete(0, "end")
-            self.entry.configure(fg="black")
-
     def select(self, name):
         self.current = name
         for n, w in self.contact_widgets.items():
             w.configure(bg="#07c160" if n == name else "#2e2e2e")
         self.header.configure(text=f"当前聊天：{name}")
+        self.entry.focus_set()  # 与常见聊天软件一致：选中联系人后光标自动进入输入框
         self.status.configure(text="")
         self._write({"event": "select", "to": name})
         self.root.after(100, self.dump_layout)
 
     def send(self):
-        text = self.entry.get()
-        if self.entry.cget("fg") == "#666666":
-            text = ""
-        text = text.strip()
+        text = self.entry.get().strip()
         if not self.current:
             self.status.configure(text="请先选择联系人")
             self._write({"event": "error", "reason": "no_contact", "text": text})
@@ -134,6 +131,7 @@ class MockChatApp:
         for n, w in self.contact_widgets.items():
             add(w, n)
         add(self.header, self.header.cget("text"))
+        add(self.field_label, PLACEHOLDER)
         entry_text = self.entry.get()
         if entry_text:
             add(self.entry, entry_text)

@@ -118,16 +118,16 @@ class TestActionSpaceBoundary:
     def test_done_allowed_for_generic(self):
         assert validate_action("确认页面已打开", A("done"), ELEMS) == []
 
-    def test_type_into_missing_field_types_into_focus(self):
-        """指定的输入框不在屏幕上时，不去点一个无关的“栏/框”，而是直接输入到当前焦点"""
+    def test_type_into_missing_field_fails_instead_of_typing_elsewhere(self):
+        """指定的输入框不在屏幕上：不去点无关的“栏/框”，也不偷偷输入到当前焦点，而是报错（会重新截图重试）"""
         from executor import ControllerExecutor
         from fakes import RecordingController
         elems = [{"text": "侧边栏", "bbox": [0, 0, 10, 10]}]
         fb = fallback_action("在“消息内容”框中输入“你好”", elems)
         assert fb["target_text"] == "消息内容" and fb["input_text"] == "你好" and needs_screen(fb)
         ctl = RecordingController()
-        assert ControllerExecutor(ctl, sleep=lambda s: None)(fb, elems)["ok"]
-        assert ctl.calls == [("type_text", "你好")]  # 没有去点“侧边栏”
+        r = ControllerExecutor(ctl, sleep=lambda s: None)(fb, elems)
+        assert r["ok"] is False and "找不到输入框" in r["error"] and ctl.calls == []
 
     def test_double_click_target_not_on_screen_no_fallback(self):
         assert fallback_action("双击“不存在.txt”", ELEMS) is None
@@ -207,3 +207,16 @@ class TestActionSpaceMultiResolution:
         elems = [{"text": "发送", "bbox": [w - 100, h - 60, w - 20, h - 20]}]
         fb = fallback_action("点击“发送”", elems)
         assert fb["action_type"] == "click" and fb["target_text"] == "发送"
+
+
+@pytest.mark.functional
+class TestAddressBarFallback:
+    def test_address_bar_not_visible_uses_ctrl_l(self):
+        fb = fallback_action("在浏览器的地址栏输入“天气预报”并按回车", [{"text": "必应", "bbox": [0, 0, 10, 10]}])
+        assert fb["action_type"] == "hotkey" and fb["input_text"] == "ctrl+l"
+        assert [f["action_type"] for f in fb["follow_up"]] == ["type", "key"]
+        assert fb["follow_up"][0]["input_text"] == "天气预报" and not needs_screen(fb)
+
+    def test_address_bar_visible_clicks_it(self):
+        fb = fallback_action("在地址栏输入“天气预报”", [{"text": "地址栏", "bbox": [0, 0, 600, 30]}])
+        assert fb["action_type"] == "type" and fb["target_text"] == "地址栏"

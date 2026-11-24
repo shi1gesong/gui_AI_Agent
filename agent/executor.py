@@ -64,8 +64,12 @@ class ControllerExecutor:
             else:
                 self.controller.double_click(*pt)
         elif a_type == "type":
-            pt = self._locate(target, elements) if target else None
-            if pt is not None:
+            if target:
+                # 指定了输入框却在屏幕上找不到时如实报错，不再“输入到当前焦点”后报成功
+                # （2026-11-24 真机 T4：输入框没被 OCR 识别出来，文字输到了别处，步骤却显示 ✓）
+                pt = self._locate(target, elements)
+                if pt is None:
+                    raise LookupError(f"屏幕上找不到输入框「{target}」，未输入")
                 self.controller.click(*pt)
                 self.sleep(0.2)
             self.controller.type_text(text)
