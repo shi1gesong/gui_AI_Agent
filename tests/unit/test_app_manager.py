@@ -229,3 +229,35 @@ class TestAppManagerMultiResolution:
         w = wins.add("计算器")
         w.left, w.top, w.width, w.height = 3000, 100, 400, 600  # 第二块屏幕上
         assert mgr.find_windows(["计算器"]) == [w]
+
+
+@pytest.mark.boundary
+class TestScreenRegions:
+    def _win(self, wins, title, rect):
+        w = wins.add(title)
+        w.left, w.top, w.width, w.height = rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]
+        return w
+
+    @pytest.mark.parametrize("title", ["Anaconda Prompt - pytest", "管理员: Anaconda Prompt", "命令提示符",
+                                       "Windows PowerShell", "C:\\Windows\\system32\\cmd.exe"])
+    def test_is_console(self, title):
+        assert AppManager.is_console(title)
+
+    @pytest.mark.parametrize("title", [MOCK_CHAT_TITLE, "计算器", "必应 - Microsoft Edge", "a.txt - Visual Studio Code"])
+    def test_not_console(self, title):
+        assert not AppManager.is_console(title)
+
+    def test_foreground_app_included_console_excluded(self):
+        wins = FakeWindowProvider()
+        self._win(wins, "Anaconda Prompt", [1000, 0, 1900, 1000])
+        self._win(wins, MOCK_CHAT_TITLE, [100, 100, 920, 660])
+        r = AppManager(windows=wins).screen_regions()
+        assert r == {"include": [100, 100, 920, 660], "exclude": [[1000, 0, 1900, 1000]]}
+
+    def test_minimized_window_rect_ignored(self):
+        wins = FakeWindowProvider()
+        self._win(wins, "计算器", [-32000, -32000, -31840, -31970])
+        assert AppManager(windows=wins).screen_regions()["include"] is None
+
+    def test_no_provider(self):
+        assert AppManager(windows=None).screen_regions() == {}

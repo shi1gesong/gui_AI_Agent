@@ -186,3 +186,32 @@ class TestPerceiverMultiResolution:
         """用户真机：2560x1440，DPI 100%（2026-11-24 real_device 用例实测比例 1.00）"""
         obs = perceiver([R("发送", [2400, 1300, 2500, 1340])], img=(2560, 1440), logical=(2560, 1440)).perceive()
         assert obs.elements[0]["bbox"] == [2400, 1300, 2500, 1340]
+
+
+@pytest.mark.boundary
+class TestRegionFilter:
+    E = [{"text": "张三", "bbox": [110, 160, 300, 200]}, {"text": "[规划] 6 个子任务", "bbox": [1010, 10, 1890, 40]}]
+
+    def test_include_foreground_window(self):
+        from perception.screen_parser import filter_by_region
+        assert [e["text"] for e in filter_by_region(self.E, [100, 100, 920, 660])] == ["张三"]
+
+    def test_exclude_console(self):
+        from perception.screen_parser import filter_by_region
+        assert [e["text"] for e in filter_by_region(self.E, None, [[1000, 0, 1900, 1000]])] == ["张三"]
+
+    def test_invalid_rects_ignored(self):
+        from perception.screen_parser import filter_by_region
+        assert len(filter_by_region(self.E, [0, 0, 0, 0], [None, [5, 5, 1, 1]])) == 2
+
+    def test_perceiver_applies_region(self, perceiver):
+        p = perceiver([R("张三", [110, 160, 300, 200]), R("控制台文字", [1010, 10, 1890, 40])])
+        p.region_fn = lambda: {"include": None, "exclude": [[1000, 0, 1900, 1000]]}
+        obs = p.perceive()
+        assert obs.texts() == ["张三"] and obs.extra["filtered_out"] == 1 and obs.summary()["filtered_out"] == 1
+
+    def test_region_fn_error_keeps_all(self, perceiver):
+        p = perceiver([R("张三", [110, 160, 300, 200])])
+        p.region_fn = lambda: 1 / 0
+        obs = p.perceive()
+        assert obs.texts() == ["张三"] and "ZeroDivisionError" in obs.extra["region_error"]

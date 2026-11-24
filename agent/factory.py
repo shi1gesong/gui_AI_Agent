@@ -75,7 +75,8 @@ def build_agent(cfg: AgentConfig, log=print):
     windows = PyGetWindowProvider() if sys.platform.startswith("win") else None
     apps = AppManager(windows=windows, controller=controller, mock_chat_log=cfg.chat_log,
                       open_timeout=cfg.open_timeout)
-    perceiver = ScreenPerceiver(capture=capture, ocr=LazyOCR(cfg.ocr_engine), min_confidence=cfg.min_confidence)
+    perceiver = ScreenPerceiver(capture=capture, ocr=LazyOCR(cfg.ocr_engine), min_confidence=cfg.min_confidence,
+                                region_fn=apps.screen_regions if windows is not None else None)
     executor = DryRunExecutor() if cfg.dry_run else ControllerExecutor(controller, app_manager=apps, settle_sec=0.3)
 
     brain = None

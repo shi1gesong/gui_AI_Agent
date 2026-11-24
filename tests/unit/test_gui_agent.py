@@ -25,7 +25,7 @@ def J(o):
 def make(tmp_path, dpi=1.0, logical=(1920, 1080), brain=None, act_mode="hybrid", planner=None, **kw):
     sim = SimDesktop(tmp_path, logical=logical, dpi=dpi)
     apps = sim.app_manager()
-    perceiver = ScreenPerceiver(capture=sim, ocr=sim, logical_size_fn=sim.logical_size)
+    perceiver = ScreenPerceiver(capture=sim, ocr=sim, logical_size_fn=sim.logical_size, region_fn=apps.screen_regions)
     executor = ControllerExecutor(sim, app_manager=apps, sleep=lambda s: None)
     planner = planner or HybridPlanner("auto" if brain else "rule", RulePlanner(app_resolver=apps.resolve_app),
                                        llm_plan=brain.plan if brain else None)
@@ -277,6 +277,53 @@ class TestGUIAgentException:
         t.setup(ctx)
         r = agent.run("给李四发送消息：今晚7点开会", checker=lambda: t.check(ctx))
         assert r["executed_all"] and r["success"] is False and "没有发给「张三」" in r["check"]["message"]
+
+
+CONSOLE_LINES = ["[指令] 给张三发送消息：今晚7点开会", "[规划] 来源=template:send_message，6 个子任务",
+                 "3.点击联系人“张三”", '4。在"消息内容"框中输入 "今晚7点开会"', "5.点击“发送”"]
+
+
+@pytest.mark.exception
+class TestRealDeviceRegressionT4:
+    """2026-11-24 Windows 真机 T4 失败复现：屏幕上同时有 Anaconda Prompt，OCR 读到了命令行里打印的子任务文字，
+    输入框占位文字又没识别准，于是“消息内容”匹配到了命令行那一整行，消息被输进了命令行，聊天记录为空。"""
+
+    def test_t4_with_console_and_misread_placeholder(self, tmp_path):
+        agent, sim, ctx = make(tmp_path)
+        sim.add_console(CONSOLE_LINES)
+        sim.placeholder_text = "消息内客"  # OCR 错字
+        r = run_task(agent, task("T4", ctx), ctx)
+        assert r["success"], (r.get("check"), [s.get("action") for s in r["steps"]])
+        assert sim.typed_to_nowhere == []
+
+    def test_t4_with_console_exact_placeholder(self, tmp_path):
+        agent, sim, ctx = make(tmp_path)
+        sim.add_console(CONSOLE_LINES)
+        assert run_task(agent, task("T4", ctx), ctx)["success"]
+
+    def test_console_text_filtered_from_observation(self, tmp_path):
+        agent, sim, ctx = make(tmp_path)
+        sim.add_console(CONSOLE_LINES)
+        sim.spawn(["python", "mock_chat.py"])
+        obs = agent.perceiver.perceive()
+        assert not any("指令" in t or "规划" in t for t in obs.texts()) and "张三" in obs.texts()
+        assert obs.extra["filtered_out"] == len(CONSOLE_LINES)
+
+    def test_long_console_line_not_grounded_without_region_filter(self, tmp_path):
+        """即使拿不到窗口位置（不做区域过滤），长句也不能被当成“消息内容”输入框"""
+        agent, sim, ctx = make(tmp_path)
+        agent.perceiver.region_fn = None
+        sim.add_console(CONSOLE_LINES)
+        sim.placeholder_text = "消息内客"
+        r = run_task(agent, task("T4", ctx), ctx)
+        assert r["success"] and sim.typed_to_nowhere == []
+
+    def test_console_foreground_not_used_as_include_region(self, tmp_path):
+        agent, sim, ctx = make(tmp_path)
+        sim.spawn(["python", "mock_chat.py"])
+        sim.add_console(CONSOLE_LINES)  # 命令行在前台
+        reg = ctx.apps.screen_regions()
+        assert reg["include"] is None and len(reg["exclude"]) == 1
 
 
 @pytest.mark.multi_resolution

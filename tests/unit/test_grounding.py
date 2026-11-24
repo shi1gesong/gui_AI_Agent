@@ -134,3 +134,29 @@ class TestGroundingMultiResolution:
 
     def test_non_uniform_scale(self):
         assert scale_point((1920, 1080), (1.5, 1.25)) == (1280, 864)
+
+
+@pytest.mark.boundary
+class TestGroundingLongTextRegression:
+    """2026-11-24 真机：命令行里打印的整句子任务含“消息内容”，被当成了输入框"""
+    LINE = '4。在"消息内容"框中输入 "今晚7点开会"'
+
+    def test_long_line_containing_target_rejected(self):
+        assert Grounder().locate("消息内容", [{"text": self.LINE, "bbox": [0, 0, 900, 30]}]) is None
+
+    def test_misread_placeholder_beats_long_line(self):
+        elems = [{"text": self.LINE, "bbox": [1000, 0, 1900, 30]}, {"text": "消息内客", "bbox": [230, 500, 700, 540]}]
+        assert Grounder().locate("消息内容", elems)["element"]["text"] == "消息内客"
+
+    def test_find_element_uses_same_scoring(self):
+        from action_validator import find_element
+        elems = [{"text": self.LINE, "bbox": [1000, 0, 1900, 30]}, {"text": "消息内客", "bbox": [230, 500, 700, 540]}]
+        assert find_element("消息内容", elems)["text"] == "消息内客"
+
+    @pytest.mark.parametrize("target,text", [("张三", "[指令] 给张三发送消息：今晚7点开会"), ("发送", "5.点击“发送”按钮然后等待")])
+    def test_other_console_lines_rejected(self, target, text):
+        assert Grounder().locate(target, [{"text": text, "bbox": [0, 0, 500, 30]}]) is None
+
+    def test_moderate_containment_still_matches(self):
+        """“传输助手”在“文件传输助手”里（长度比 0.67）仍然匹配"""
+        assert Grounder().locate("传输助手", [{"text": "文件传输助手", "bbox": [0, 0, 10, 10]}]) is not None

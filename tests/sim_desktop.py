@@ -30,6 +30,8 @@ class SimDesktop:
         self.typed_to_nowhere = []
         self.ocr_calls = 0
         self.hide_contacts = set()
+        self.console = []                 # [(文字, bbox)]：始终可见的命令行窗口内容（Agent 自己打印的日志）
+        self.placeholder_text = "消息内容"  # OCR 读到的输入框占位文字（可模拟识别错字）
 
     # ---------------- 启动器 ----------------
     def spawn(self, cmd, **kw):
@@ -37,7 +39,8 @@ class SimDesktop:
         self.calls.append(("spawn", s))
         if "mock_chat.py" in s:
             self.chat = {"selected": None, "focus": False, "text": "", "sent": []}
-            self.windows.add(MOCK_CHAT_TITLE)
+            w = self.windows.add(MOCK_CHAT_TITLE)
+            w.left, w.top, w.width, w.height = self.ox, self.oy, 820, 560
         elif "notepad" in s:
             self.windows.add("无标题 - 记事本")
         elif "calc" in s:
@@ -68,11 +71,22 @@ class SimDesktop:
         w.append(("当前聊天：" + self.chat["selected"] if self.chat["selected"] else "请选择联系人",
                   [ox + 230, oy + 10, ox + 600, oy + 50]))
         if not self.chat["focus"] or self.chat["text"]:
-            w.append((self.chat["text"] or "消息内容", [ox + 230, oy + 500, ox + 700, oy + 540]))
+            w.append((self.chat["text"] or self.placeholder_text, [ox + 230, oy + 500, ox + 700, oy + 540]))
         w.append(("发送", [ox + 720, oy + 500, ox + 800, oy + 540]))
         return w
 
+    def add_console(self, lines, rect=(1000, 0, 1900, 1000)):
+        """模拟 Anaconda Prompt 窗口：显示 Agent 打印的规划/日志文字"""
+        w = self.windows.add("Anaconda Prompt - python -m agent.cli")
+        w.left, w.top, w.width, w.height = rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]
+        self.console = [(t, [rect[0] + 10, rect[1] + 10 + 40 * i, rect[2] - 10, rect[1] + 40 + 40 * i])
+                        for i, t in enumerate(lines)]
+        return w
+
     def elements_logical(self):
+        return self._app_elements() + list(self.console)
+
+    def _app_elements(self):
         title = self._active()
         if title == MOCK_CHAT_TITLE and self.chat is not None:
             return self.chat_widgets()
@@ -114,7 +128,7 @@ class SimDesktop:
                 self.chat["focus"] = False
             elif hit == "发送":
                 self._chat_send()
-            elif hit is not None and (hit == "消息内容" or hit == self.chat["text"]):
+            elif hit is not None and (hit == self.placeholder_text or hit == self.chat["text"]):
                 self.chat["focus"] = True
             else:
                 self.chat["focus"] = False
@@ -130,7 +144,7 @@ class SimDesktop:
         elif "Edge" in title and self.browser and self.browser["focus"]:
             self.browser["query"] = (self.browser["query"] or "") + text
         else:
-            self.typed_to_nowhere.append(text)
+            self.typed_to_nowhere.append(text)  # 例如输进了命令行窗口
 
     def press_key(self, key):
         self.calls.append(("press_key", key))

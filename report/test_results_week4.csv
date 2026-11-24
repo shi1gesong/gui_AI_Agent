@@ -313,6 +313,18 @@ nodeid,module,category,env,status
 "tests/unit/test_app_manager.py::TestAppManagerFunctional::test_title_keywords_for_file",test_app_manager.py,functional,mock,passed
 "tests/unit/test_app_manager.py::TestAppManagerFunctional::test_unknown_app_uses_win_search",test_app_manager.py,functional,mock,passed
 "tests/unit/test_app_manager.py::TestAppManagerMultiResolution::test_window_lookup_independent_of_geometry",test_app_manager.py,multi_resolution,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_foreground_app_included_console_excluded",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_is_console[Anaconda Prompt - pytest]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_is_console[C:\\Windows\\system32\\cmd.exe]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_is_console[Windows PowerShell]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_is_console[\u547d\u4ee4\u63d0\u793a\u7b26]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_is_console[\u7ba1\u7406\u5458: Anaconda Prompt]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_minimized_window_rect_ignored",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_no_provider",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_not_console[GUI Agent \u6a21\u62df\u804a\u5929]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_not_console[\u5fc5\u5e94 - Microsoft Edge]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_not_console[\u8ba1\u7b97\u5668]",test_app_manager.py,boundary,mock,passed
+"tests/unit/test_app_manager.py::TestScreenRegions::test_not_console[a.txt - Visual Studio Code]",test_app_manager.py,boundary,mock,passed
 "tests/unit/test_base_agent.py::TestAgentBoundary::test_act_list_response_takes_first",test_base_agent.py,boundary,mock,passed
 "tests/unit/test_base_agent.py::TestAgentBoundary::test_act_rejects_invalid_action_type",test_base_agent.py,boundary,mock,passed
 "tests/unit/test_base_agent.py::TestAgentBoundary::test_act_rejects_target_not_on_screen",test_base_agent.py,boundary,mock,passed
@@ -526,6 +538,12 @@ nodeid,module,category,env,status
 "tests/unit/test_grounding.py::TestGroundingFunctional::test_target_is_substring_of_element",test_grounding.py,functional,mock,passed
 "tests/unit/test_grounding.py::TestGroundingFunctional::test_tie_prefers_higher_confidence",test_grounding.py,functional,mock,passed
 "tests/unit/test_grounding.py::TestGroundingFunctional::test_tie_prefers_smaller_box",test_grounding.py,functional,mock,passed
+"tests/unit/test_grounding.py::TestGroundingLongTextRegression::test_find_element_uses_same_scoring",test_grounding.py,boundary,mock,passed
+"tests/unit/test_grounding.py::TestGroundingLongTextRegression::test_long_line_containing_target_rejected",test_grounding.py,boundary,mock,passed
+"tests/unit/test_grounding.py::TestGroundingLongTextRegression::test_misread_placeholder_beats_long_line",test_grounding.py,boundary,mock,passed
+"tests/unit/test_grounding.py::TestGroundingLongTextRegression::test_moderate_containment_still_matches",test_grounding.py,boundary,mock,passed
+"tests/unit/test_grounding.py::TestGroundingLongTextRegression::test_other_console_lines_rejected[\u53d1\u9001-5.\u70b9\u51fb\u201c\u53d1\u9001\u201d\u6309\u94ae\u7136\u540e\u7b49\u5f85]",test_grounding.py,boundary,mock,passed
+"tests/unit/test_grounding.py::TestGroundingLongTextRegression::test_other_console_lines_rejected[\u5f20\u4e09-[\u6307\u4ee4] \u7ed9\u5f20\u4e09\u53d1\u9001\u6d88\u606f\uff1a\u4eca\u665a7\u70b9\u5f00\u4f1a]",test_grounding.py,boundary,mock,passed
 "tests/unit/test_grounding.py::TestGroundingMultiResolution::test_center_scaled_back_to_logical[1.0]",test_grounding.py,multi_resolution,mock,passed
 "tests/unit/test_grounding.py::TestGroundingMultiResolution::test_center_scaled_back_to_logical[1.25]",test_grounding.py,multi_resolution,mock,passed
 "tests/unit/test_grounding.py::TestGroundingMultiResolution::test_center_scaled_back_to_logical[1.5]",test_grounding.py,multi_resolution,mock,passed
@@ -581,6 +599,11 @@ nodeid,module,category,env,status
 "tests/unit/test_gui_agent.py::TestGUIAgentMultiResolution::test_t4_under_dpi_scaling[1.75]",test_gui_agent.py,multi_resolution,mock,passed
 "tests/unit/test_gui_agent.py::TestGUIAgentMultiResolution::test_t4_under_dpi_scaling[2.0]",test_gui_agent.py,multi_resolution,mock,passed
 "tests/unit/test_gui_agent.py::TestGUIAgentMultiResolution::test_unscaled_coordinates_would_miss",test_gui_agent.py,multi_resolution,mock,passed
+"tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_console_foreground_not_used_as_include_region",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_console_text_filtered_from_observation",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_long_console_line_not_grounded_without_region_filter",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_with_console_and_misread_placeholder",test_gui_agent.py,exception,mock,passed
+"tests/unit/test_gui_agent.py::TestRealDeviceRegressionT4::test_t4_with_console_exact_placeholder",test_gui_agent.py,exception,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_env_priority",test_llm_interface.py,boundary,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_reads_env",test_llm_interface.py,boundary,mock,passed
 "tests/unit/test_llm_interface.py::TestLLMBoundary::test_base_url_trailing_slash",test_llm_interface.py,boundary,mock,passed
@@ -863,6 +886,11 @@ nodeid,module,category,env,status
 "tests/unit/test_screen_parser.py::TestPerceiverMultiResolution::test_dpi_100_identity[size3]",test_screen_parser.py,multi_resolution,mock,passed
 "tests/unit/test_screen_parser.py::TestPerceiverMultiResolution::test_second_monitor_offset",test_screen_parser.py,multi_resolution,mock,passed
 "tests/unit/test_screen_parser.py::TestPerceiverMultiResolution::test_user_machine_2560x1440_dpi100",test_screen_parser.py,multi_resolution,mock,passed
+"tests/unit/test_screen_parser.py::TestRegionFilter::test_exclude_console",test_screen_parser.py,boundary,mock,passed
+"tests/unit/test_screen_parser.py::TestRegionFilter::test_include_foreground_window",test_screen_parser.py,boundary,mock,passed
+"tests/unit/test_screen_parser.py::TestRegionFilter::test_invalid_rects_ignored",test_screen_parser.py,boundary,mock,passed
+"tests/unit/test_screen_parser.py::TestRegionFilter::test_perceiver_applies_region",test_screen_parser.py,boundary,mock,passed
+"tests/unit/test_screen_parser.py::TestRegionFilter::test_region_fn_error_keeps_all",test_screen_parser.py,boundary,mock,passed
 "tests/unit/test_screenshot.py::TestScreenshotBoundary::test_existing_save_dir_is_reused",test_screenshot.py,boundary,mock,passed
 "tests/unit/test_screenshot.py::TestScreenshotBoundary::test_monitor_index_zero_is_virtual_desktop",test_screenshot.py,boundary,mock,passed
 "tests/unit/test_screenshot.py::TestScreenshotBoundary::test_negative_monitor_index_rejected",test_screenshot.py,boundary,mock,passed

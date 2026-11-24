@@ -24,6 +24,13 @@ import json
 import re
 from typing import List, Optional
 
+try:
+    from .grounding import Grounder
+except ImportError:
+    from grounding import Grounder
+
+_GROUNDER = Grounder()
+
 VALID_ACTION_TYPES = ("click", "type", "scroll", "key",
                       "double_click", "hotkey", "open_app", "close_app", "wait", "done")
 # 不需要屏幕元素就能执行的动作（执行前可以跳过截图 + OCR）
@@ -132,18 +139,12 @@ def parse_wait_seconds(value, default: float = 1.0) -> Optional[float]:
 
 
 def find_element(target: str, elements: List[dict]) -> Optional[dict]:
-    """在屏幕元素中查找目标：先精确匹配，再互相包含匹配"""
-    t = _norm(target)
-    if not t:
+    """在屏幕元素中查找目标：精确匹配 > 互相包含（长句里含目标的不算）> 相似度（容忍 OCR 错字）。
+    2026-11-24 起与执行器共用 grounding.Grounder 的打分，保证“校验/兜底选中的元素”和“实际点击的元素”一致"""
+    if not _norm(target):
         return None
-    for e in elements:
-        if _norm(e.get("text")) == t:
-            return e
-    for e in elements:
-        et = _norm(e.get("text"))
-        if et and (t in et or et in t):
-            return e
-    return None
+    ranked = _GROUNDER.rank(target, [e for e in elements if isinstance(e, dict)])
+    return ranked[0][1] if ranked else None
 
 
 class SubtaskIntent:

@@ -70,7 +70,7 @@ class MockChatApp:
 
         bottom = tk.Frame(right, bg="#f5f5f5")
         bottom.pack(fill="x", padx=16, pady=16)
-        self.entry = tk.Entry(bottom, font=big, fg="#888888", relief="solid", bd=1)
+        self.entry = tk.Entry(bottom, font=big, fg="#666666", relief="solid", bd=1)
         self.entry.insert(0, PLACEHOLDER)
         self.entry.pack(side="left", fill="x", expand=True, ipady=8)
         self.entry.bind("<FocusIn>", self._clear_placeholder)
@@ -82,7 +82,7 @@ class MockChatApp:
         root.after(500, self.dump_layout)
 
     def _clear_placeholder(self, _e=None):
-        if self.entry.get() == PLACEHOLDER and self.entry.cget("fg") == "#888888":
+        if self.entry.get() == PLACEHOLDER and self.entry.cget("fg") == "#666666":
             self.entry.delete(0, "end")
             self.entry.configure(fg="black")
 
@@ -97,7 +97,7 @@ class MockChatApp:
 
     def send(self):
         text = self.entry.get()
-        if self.entry.cget("fg") == "#888888":
+        if self.entry.cget("fg") == "#666666":
             text = ""
         text = text.strip()
         if not self.current:

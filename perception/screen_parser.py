@@ -46,6 +46,7 @@ class Observation:
 
     def summary(self) -> dict:
         return {"screenshot": self.screenshot_path, "elements": len(self.elements), "raw": self.raw_count,
+                **({"filtered_out": self.extra["filtered_out"]} if "filtered_out" in self.extra else {}),
                 "image_size": list(self.image_size), "logical_size": list(self.logical_size),
                 "scale": [round(self.scale[0], 4), round(self.scale[1], 4)], "sec": round(self.elapsed_sec, 2)}
 
@@ -59,12 +60,17 @@ def _default_logical_size():
 class ScreenPerceiver:
     def __init__(self, capture=None, ocr=None, min_confidence: float = 0.3, monitor_index: int = 1,
                  logical_size_fn: Optional[Callable[[], Tuple[int, int]]] = None,
-                 offset: Tuple[int, int] = (0, 0), max_elements: int = 300):
+                 offset: Tuple[int, int] = (0, 0), max_elements: int = 300,
+                 region_fn: Optional[Callable[[], dict]] = None):
         """
         capture: perception.screenshot.ScreenCapture（或有 capture_full_screen(monitor_index, save) 与 save_dir 的对象）
         ocr: perception.ocr_detector.OCRDetector（或有 detect(image_path) 的对象）
         logical_size_fn: 返回鼠标坐标系屏幕尺寸，默认 pyautogui.size()
         offset: 所截显示器在鼠标坐标系中的左上角（多显示器时非 0）
+        region_fn: 返回 {"include": [l,t,r,b] 或 None, "exclude": [[l,t,r,b], ...]}（鼠标坐标）。
+                   只保留中心点在 include 内、且不在任何 exclude 内的元素。通常 include = 前台窗口，
+                   exclude = Agent 自己的命令行窗口（2026-11-24 真机 T4：OCR 读到了命令行里打印的子任务文字，
+                   把它当成“消息内容”输入框点了上去，消息输进了命令行）
         """
         self.capture = capture
         self.ocr = ocr
@@ -73,6 +79,7 @@ class ScreenPerceiver:
         self.logical_size_fn = logical_size_fn or _default_logical_size
         self.offset = offset
         self.max_elements = max_elements
+        self.region_fn = region_fn
 
     # ---- 纯函数部分（便于单元测试） ----
     @staticmethod
@@ -132,8 +139,41 @@ class ScreenPerceiver:
         logical = tuple(self.logical_size_fn())
         scale = self.compute_scale(img.size, logical)
         elements = self.postprocess(raw, scale)
+        extra = {}
+        if self.region_fn is not None:
+            try:
+                region = self.region_fn() or {}
+            except Exception as e:  # 取窗口位置失败时不过滤，照常返回全屏元素
+                region = {}
+                extra["region_error"] = f"{type(e).__name__}: {e}"
+            before = len(elements)
+            elements = filter_by_region(elements, region.get("include"), region.get("exclude") or [])
+            extra.update(region={"include": region.get("include"), "exclude": region.get("exclude") or []},
+                         filtered_out=before - len(elements))
         return Observation(elements=elements, screenshot_path=str(path), image_size=tuple(img.size),
-                           logical_size=logical, scale=scale, elapsed_sec=time.time() - t0, raw_count=len(raw or []))
+                           logical_size=logical, scale=scale, elapsed_sec=time.time() - t0, raw_count=len(raw or []),
+                           extra=extra)
+
+
+def _inside(pt, rect) -> bool:
+    return rect[0] <= pt[0] <= rect[2] and rect[1] <= pt[1] <= rect[3]
+
+
+def filter_by_region(elements: List[dict], include=None, exclude=()) -> List[dict]:
+    """按元素中心点过滤：在 include 矩形内（None 表示不限）且不在任何 exclude 矩形内"""
+    valid = lambda r: r is not None and len(r) == 4 and r[2] > r[0] and r[3] > r[1]  # noqa: E731
+    include = include if valid(include) else None
+    exclude = [r for r in exclude if valid(r)]
+    out = []
+    for e in elements:
+        b = e.get("bbox") or [0, 0, 0, 0]
+        c = ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+        if include is not None and not _inside(c, include):
+            continue
+        if any(_inside(c, r) for r in exclude):
+            continue
+        out.append(e)
+    return out
 
 
 def _iou(a, b) -> float:

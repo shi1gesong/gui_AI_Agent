@@ -18,6 +18,10 @@ from typing import List, Optional, Sequence, Tuple
 _PUNCT_RE = re.compile(r"[\s​·•。.，,、:：;；!！?？()（）\[\]【】<>《》\"'“”‘’|_\-—~…]+")
 
 
+# 目标文字长度 / 元素文字长度 低于该比例时，不认为“元素包含目标”是匹配
+LONG_TEXT_RATIO = 0.4
+
+
 def normalize_text(s) -> str:
     s = unicodedata.normalize("NFKC", str(s or ""))
     return _PUNCT_RE.sub("", s).lower()
@@ -32,6 +36,10 @@ def match_score(target: str, text: str) -> float:
         return 1.0
     if t in e or e in t:
         short, long_ = sorted((len(t), len(e)))
+        if t in e and len(t) / len(e) < LONG_TEXT_RATIO:
+            # 目标只是一大段文字里的几个字（例如命令行窗口里打印的整句子任务
+            # “4.在“消息内容”框中输入…”），这不是同一个控件。2026-11-24 真机 T4 就是这样点错的
+            return 0.45
         return 0.7 + 0.25 * short / long_
     return difflib.SequenceMatcher(None, t, e).ratio() * 0.9
 

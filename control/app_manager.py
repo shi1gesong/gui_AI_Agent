@@ -45,6 +45,11 @@ APP_REGISTRY: Dict[str, dict] = {
 }
 
 
+# 命令行 / 终端窗口的标题关键字：Agent 自己在这些窗口里打印日志，感知时要排除
+CONSOLE_TITLES = ["Anaconda Prompt", "Anaconda Powershell", "命令提示符", "Command Prompt", "cmd.exe", "PowerShell",
+                  "Windows Terminal", "终端", "Terminal", "python.exe", "pytest", "Miniconda"]
+
+
 def _norm(s) -> str:
     return "".join(str(s or "").split()).lower()
 
@@ -153,6 +158,37 @@ class AppManager:
             return getattr(w, "title", "") or ""
         except Exception:
             return ""
+
+    @staticmethod
+    def window_rect(win):
+        try:
+            l, t = int(win.left), int(win.top)
+            r, b = l + int(win.width), t + int(win.height)
+        except Exception:
+            return None
+        if r <= l or b <= t or (l <= -30000 and t <= -30000):  # 最小化窗口坐标为 -32000
+            return None
+        return [l, t, r, b]
+
+    @staticmethod
+    def is_console(title: str) -> bool:
+        t = _norm(title)
+        return any(_norm(k) in t for k in CONSOLE_TITLES)
+
+    def screen_regions(self) -> dict:
+        """给感知模块用：include = 前台窗口（是命令行时不限制），exclude = 所有命令行窗口"""
+        if self.windows is None:
+            return {}
+        include = None
+        try:
+            act = self.windows.active_window()
+        except Exception:
+            act = None
+        if act is not None and not self.is_console(getattr(act, "title", "")):
+            include = self.window_rect(act)
+        exclude = [r for r in (self.window_rect(w) for w in self.list_windows()
+                               if self.is_console(getattr(w, "title", ""))) if r]
+        return {"include": include, "exclude": exclude}
 
     def wait_for_window(self, keywords: List[str], timeout: float, exclude_handles=()):
         """等待出现标题匹配的窗口；exclude_handles 为启动前已存在的窗口（优先返回新窗口）"""
