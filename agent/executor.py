@@ -56,13 +56,20 @@ class ControllerExecutor:
         self._detail.setdefault("points", []).append({"key": key, "point": list(pt)})
         return pt
 
-    def _locate(self, target: str, elements: List[dict]):
+    def _locate(self, target: str, elements: List[dict], prefer_input: bool = False):
         hit = self.grounder.locate(target, elements)
         if hit is None:
             return None
-        self._detail.setdefault("grounding", []).append(
-            {"target": target, "matched": hit["element"].get("text"), "score": hit["score"], "point": list(hit["point"])})
-        return hit["point"]
+        point = hit["point"]
+        rec = {"target": target, "matched": hit["element"].get("text"), "score": hit["score"]}
+        ib = hit["element"].get("input_bbox") if prefer_input else None
+        if ib and len(ib) == 4:
+            # 第6周：文字是输入框的标签（perception/ui_detector.py 关联到了右侧/下方的输入框）→ 点输入框本身
+            point = ((int(ib[0]) + int(ib[2])) // 2, (int(ib[1]) + int(ib[3])) // 2)
+            rec["input_bbox"] = list(ib)
+        rec["point"] = list(point)
+        self._detail.setdefault("grounding", []).append(rec)
+        return point
 
     def _run_one(self, action: dict, elements: List[dict]):
         a_type = action.get("action_type")
@@ -97,7 +104,7 @@ class ControllerExecutor:
             elif target:
                 # 指定了输入框却在屏幕上找不到时如实报错，不再“输入到当前焦点”后报成功
                 # （2026-11-24 真机 T4：输入框没被 OCR 识别出来，文字输到了别处，步骤却显示 ✓）
-                pt = self._locate(target, elements)
+                pt = self._locate(target, elements, prefer_input=True)
                 if pt is None:
                     raise LookupError(f"屏幕上找不到输入框「{target}」，未输入")
                 self.controller.click(*pt)
@@ -135,6 +142,13 @@ class ControllerExecutor:
                 self._detail["open"] = r
                 if not r.get("ok"):
                     raise RuntimeError(r.get("error", f"打开「{target}」失败"))
+        elif a_type == "switch_app":  # 第6周：激活已打开的窗口
+            if self.app_manager is None:
+                raise RuntimeError("切换窗口需要 AppManager")
+            r = self.app_manager.activate(target)
+            self._detail["switch"] = r
+            if not r.get("ok"):
+                raise RuntimeError(r.get("error", f"切换到「{target}」失败"))
         elif a_type == "close_app":
             if self.app_manager is None:
                 self.controller.hotkey("alt", "f4")

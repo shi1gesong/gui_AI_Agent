@@ -47,6 +47,8 @@ class Observation:
     def summary(self) -> dict:
         return {"screenshot": self.screenshot_path, "elements": len(self.elements), "raw": self.raw_count,
                 **({"filtered_out": self.extra["filtered_out"]} if "filtered_out" in self.extra else {}),
+                **({"cache": self.extra["cache"], "ocr_area_ratio": self.extra.get("ocr_area_ratio")}
+                   if "cache" in self.extra else {}),
                 "image_size": list(self.image_size), "logical_size": list(self.logical_size),
                 "scale": [round(self.scale[0], 4), round(self.scale[1], 4)], "sec": round(self.elapsed_sec, 2)}
 

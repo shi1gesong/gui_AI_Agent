@@ -36,6 +36,14 @@ class AgentConfig:
     open_timeout: float = 10.0
     vlm_url: Optional[str] = None   # 第5周 --act vlm：finetune/serve.py 的地址
     vlm_ocr: bool = False           # vlm 模式下是否仍跑 OCR（默认不跑，省 4~6 秒/步）
+    engine: str = "v2"              # 第6周：v2（拆解 + 自动重试 + 监控 + 感知优化）/ v1（第4周闭环，对比用）
+    roi: bool = True                # v2 感知：只对前台窗口做 OCR
+    ocr_cache: bool = True          # v2 感知：画面不变时复用 OCR 结果、只识别变化区域
+    widgets: bool = True            # v2 感知：OpenCV 检测输入框 / 按钮并关联标签
+    preprocess: Optional[str] = None  # v2 感知：contrast / upscale
+    verify_effect: bool = True      # v2：截图前后对比校验动作是否生效
+    goal_retries: int = 1           # v2：可重放目标失败后整体重做次数
+    budget_sec: Optional[float] = None  # v2：单条指令的总时间预算
     extra: dict = field(default_factory=dict)
 
 
@@ -84,9 +92,18 @@ def build_agent(cfg: AgentConfig, log=print):
     windows = PyGetWindowProvider() if sys.platform.startswith("win") else None
     apps = AppManager(windows=windows, controller=controller, mock_chat_log=cfg.chat_log,
                       open_timeout=cfg.open_timeout)
+    if cfg.engine not in ("v1", "v2"):
+        raise ValueError(f"不支持的引擎 {cfg.engine!r}，可选 v1 / v2")
     use_ocr = cfg.act_mode != "vlm" or cfg.vlm_ocr
-    perceiver = ScreenPerceiver(capture=capture, ocr=LazyOCR(cfg.ocr_engine) if use_ocr else NullOCR(), min_confidence=cfg.min_confidence,
-                                region_fn=apps.screen_regions if windows is not None else None)
+    ocr = LazyOCR(cfg.ocr_engine) if use_ocr else NullOCR()
+    region_fn = apps.screen_regions if windows is not None else None
+    if cfg.engine == "v2":
+        from perception.perceiver_v2 import PerceiverV2
+        perceiver = PerceiverV2(capture=capture, ocr=ocr, min_confidence=cfg.min_confidence, region_fn=region_fn,
+                                roi=cfg.roi, cache=cfg.ocr_cache, incremental=cfg.ocr_cache, widgets=cfg.widgets,
+                                preprocess=cfg.preprocess)
+    else:
+        perceiver = ScreenPerceiver(capture=capture, ocr=ocr, min_confidence=cfg.min_confidence, region_fn=region_fn)
     executor = DryRunExecutor() if cfg.dry_run else ControllerExecutor(controller, app_manager=apps, settle_sec=0.3)
 
     brain = None
@@ -107,9 +124,19 @@ def build_agent(cfg: AgentConfig, log=print):
     planner = HybridPlanner(mode=planner_mode,
                             rule=RulePlanner(chat_app=cfg.chat_app, app_resolver=apps.resolve_app),
                             llm_plan=brain.plan if brain else None)
-    agent = GUIAgent(perceiver=perceiver, executor=executor, planner=planner, brain=brain,
-                     act_mode=act_mode, reflect_mode=cfg.reflect_mode if brain else "rule",
-                     step_retries=cfg.step_retries, max_steps=cfg.max_steps, trace_dir=str(run_dir), log=log,
-                     vlm=vlm)
+    if cfg.engine == "v2":
+        from agent.agent_v2 import GUIAgentV2
+        from agent.decomposer import Decomposer
+        decomposer = Decomposer(planner.rule, llm_plan=brain.plan if brain else None, mode=planner_mode)
+        agent = GUIAgentV2(perceiver, executor, decomposer=decomposer, brain=brain, act_mode=act_mode,
+                           reflect_mode=cfg.reflect_mode if brain else "rule", app_manager=apps,
+                           verify_effect=cfg.verify_effect and not cfg.dry_run, goal_retries=cfg.goal_retries,
+                           max_steps=max(cfg.max_steps, 40), trace_dir=str(run_dir), log=log, vlm=vlm,
+                           settle_sec=0.2, budget_sec=cfg.budget_sec, watchdog_sec=5.0, planner=planner)
+    else:
+        agent = GUIAgent(perceiver=perceiver, executor=executor, planner=planner, brain=brain,
+                         act_mode=act_mode, reflect_mode=cfg.reflect_mode if brain else "rule",
+                         step_retries=cfg.step_retries, max_steps=cfg.max_steps, trace_dir=str(run_dir), log=log,
+                         vlm=vlm)
     return agent, {"vlm": vlm, "app_manager": apps, "controller": controller, "capture": capture, "perceiver": perceiver,
                    "run_dir": run_dir, "brain": brain}

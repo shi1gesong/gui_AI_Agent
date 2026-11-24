@@ -217,9 +217,11 @@ class AppManager:
     # ---------- open / close ----------
     def open(self, name: str, wait: bool = True) -> dict:
         """打开程序或文件。返回 {"ok", "method", "target", "window"}，失败时 ok=False 并带 error"""
-        name = str(name or "").strip()
+        name = str(name or "").strip().strip("“”\"'")
         if not name:
             return {"ok": False, "error": "要打开的程序名为空"}
+        if is_url(name):  # 第6周：打开网址 = 默认浏览器打开
+            return self._open_url(name, wait)
         f = self.resolve_file(name) if _looks_like_path(name) else None
         key = None if f is not None else self.resolve_app(name)
         before = {_handle(w) for w in self.list_windows()}
@@ -237,6 +239,7 @@ class AppManager:
                     cmd = [sys.executable, arg]
                     if self.mock_chat_log:
                         cmd += ["--log", self.mock_chat_log]
+                    cmd += list(getattr(self, "mock_chat_args", []) or [])  # 第6周：--load-delay / --popup-on-select
                     self.spawn(cmd)
                 elif kind == "search":
                     self._win_search(arg)
@@ -257,6 +260,39 @@ class AppManager:
             self._activate(win)
             result["window"] = getattr(win, "title", "")
         return result
+
+    def _open_url(self, url: str, wait: bool = True) -> dict:
+        url = url if url.lower().startswith(("http://", "https://")) else "https://" + url
+        before = {_handle(w) for w in self.list_windows()}
+        try:
+            self.startfile(url)
+        except Exception as e:
+            return {"ok": False, "error": f"打开网址「{url}」失败: {type(e).__name__}: {e}"}
+        result = {"ok": True, "method": "url", "target": url}
+        if wait and self.windows is not None:
+            win = self.wait_for_window(self.registry["浏览器"]["titles"], self.open_timeout, exclude_handles=before)
+            if win is None:
+                return {**result, "ok": False, "error": f"{self.open_timeout:g} 秒内没有出现浏览器窗口"}
+            self._activate(win)
+            result["window"] = getattr(win, "title", "")
+        return result
+
+    def activate(self, name: str) -> dict:
+        """第6周 switch_app：把已打开的窗口切到前台（不重新启动程序）"""
+        name = str(name or "").strip().strip("“”\"'")
+        if self.windows is None:
+            return {"ok": False, "error": "没有窗口管理器，无法切换窗口"}
+        keywords = self.title_keywords(name)
+        wins = self.find_windows(keywords)
+        if not wins:
+            return {"ok": False, "error": f"没有找到标题含 {keywords} 的窗口，无法切换"}
+        w = wins[0]
+        self._activate(w)
+        try:
+            w.activate()
+        except Exception as e:
+            return {"ok": False, "error": f"激活窗口「{getattr(w, 'title', '')}」失败: {e}"}
+        return {"ok": True, "method": "activate", "window": getattr(w, "title", "")}
 
     def close(self, name: str) -> dict:
         """关闭标题匹配的所有窗口（WM_CLOSE）。name 为“当前窗口”时关闭前台窗口"""
@@ -307,6 +343,11 @@ class AppManager:
 
 def _handle(w):
     return getattr(w, "_hWnd", None) or getattr(w, "handle", None) or id(w)
+
+
+def is_url(name: str) -> bool:
+    import re
+    return bool(re.match(r"^(?:https?://|www\.)\S+$", str(name or "").strip(), re.IGNORECASE))
 
 
 def _looks_like_path(name: str) -> bool:

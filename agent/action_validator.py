@@ -32,9 +32,9 @@ except ImportError:
 _GROUNDER = Grounder()
 
 VALID_ACTION_TYPES = ("click", "type", "scroll", "key",
-                      "double_click", "hotkey", "open_app", "close_app", "wait", "done")
+                      "double_click", "hotkey", "open_app", "close_app", "wait", "done", "switch_app")
 # 不需要屏幕元素就能执行的动作（执行前可以跳过截图 + OCR）
-SCREENLESS_ACTION_TYPES = ("key", "hotkey", "open_app", "close_app", "wait", "done", "scroll")
+SCREENLESS_ACTION_TYPES = ("key", "hotkey", "open_app", "close_app", "wait", "done", "scroll", "switch_app")
 MAX_WAIT_SEC = 30.0
 
 KEY_ALIASES = {
@@ -71,6 +71,8 @@ _TYPE_TEXT_RE = re.compile(r"(?:输入|键入|填写|填入)(?!框|栏)[：:\s]*
 _KEY_RE = re.compile(r"按(?:下)?\s*(回车|enter|return|tab|esc|escape|退格|backspace|空格|space|win|windows|delete|删除|f5)",
                      re.IGNORECASE)
 _OPEN_RE = re.compile(r"^(?:打开|启动|运行)(.+)$")
+# 第6周：切换到已打开的窗口（不重新启动程序）
+_SWITCH_RE = re.compile(r"^(?:切换到|切换至|切回|回到|返回到)\s*[“\"'‘「]?([^”\"'’」]+?)[”\"'’」]?(?:窗口)?$")
 _CLOSE_RE = re.compile(r"^(?:关闭|关掉|退出)(.+)$")
 _FIELD_RE = re.compile(r"在(.+?)(?:中|里|内)?(?:输入|键入|填写|填入)(?!框|栏)")
 _HOTKEY_RE = re.compile(r"((?:ctrl|control|alt|shift|win)(?:\s*\+\s*[a-z0-9]+)+)", re.IGNORECASE)
@@ -201,7 +203,11 @@ class SubtaskIntent:
                     self.close_target = self.close_target[: -len(suffix)]
             if self.close_target in ("当前", "窗口", "程序", "应用"):
                 self.close_target = "当前窗口"
-        self.click_targets = self.quoted if (self.quoted and not self.type_intent) else []
+        sm = _SWITCH_RE.match(st)
+        self.switch_target = sm.group(1).strip() if sm and not self.type_intent else None
+        if self.switch_target:
+            self.open_target = None
+        self.click_targets = self.quoted if (self.quoted and not self.type_intent and not self.switch_target) else []
         if not self.click_targets and self.double_click:
             m = re.search(r"双击(?:打开)?(.+)$", st)
             if m and m.group(1).strip():
@@ -255,6 +261,8 @@ def validate_action(subtask: str, action, elements: List[dict]) -> List[str]:
         reasons.append(f"子任务要求按 {intent.key} 键，action_type 应为 key，实际是 {a_type}")
     elif intent.wait_seconds is not None and a_type != "wait":
         reasons.append(f"子任务要求等待，action_type 应为 wait，实际是 {a_type}")
+    elif intent.switch_target and a_type not in ("switch_app", "click"):
+        reasons.append(f"子任务要切换到「{intent.switch_target}」，action_type 应为 switch_app，实际是 {a_type}")
     elif intent.close_target and a_type not in ("close_app", "hotkey"):
         reasons.append(f"子任务要关闭「{intent.close_target}」，action_type 应为 close_app，实际是 {a_type}")
     elif intent.double_click and a_type != "double_click":
@@ -305,6 +313,11 @@ def validate_action(subtask: str, action, elements: List[dict]) -> List[str]:
             reasons.append("open_app 动作缺少 target_text（要打开的程序名或文件路径）")
         elif intent.open_target and not _matches_any(target, intent.open_aliases()):
             reasons.append(f"子任务要打开「{intent.open_target}」，实际打开「{target}」")
+    elif a_type == "switch_app":
+        if not target:
+            reasons.append("switch_app 动作缺少 target_text（要切换到的程序名/窗口标题）")
+        elif intent.switch_target and not _matches_any(target, _aliases(intent.switch_target)):
+            reasons.append(f"子任务要切换到「{intent.switch_target}」，实际切换到「{target}」")
     elif a_type == "close_app":
         if not target:
             reasons.append("close_app 动作缺少 target_text（要关闭的程序名/窗口标题）")
@@ -329,6 +342,8 @@ def fallback_action(subtask: str, elements: List[dict]) -> Optional[dict]:
         return _fb("wait", "", f"{intent.wait_seconds:g}")
     if intent.close_target:
         return _fb("close_app", intent.close_target)
+    if intent.switch_target:
+        return _fb("switch_app", intent.switch_target)
     if intent.hotkey and not intent.type_intent:
         return _fb("hotkey", "", "+".join(intent.hotkey))
     if intent.double_click and intent.click_targets:

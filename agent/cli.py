@@ -5,7 +5,7 @@ GUI Agent v1.0 命令行入口（第4周）
     python -m agent.cli "在浏览器中搜索天气预报"      执行一条指令
     python -m agent.cli --plan-only "打开记事本"     只看规划结果，不动鼠标
     python -m agent.cli --dry-run "给张三发送消息：你好"  截图+OCR+决策，但不执行动作
-    python -m agent.cli --task T4                    执行预置基础任务（T1~T5，见 --list-tasks）
+    python -m agent.cli --task T4                    执行预置任务（基础 T1~T5、第6周复杂任务 C1~C6，见 --list-tasks）
     python -m agent.cli                              交互模式，逐条输入指令，输入 q 退出
 
 常用参数：
@@ -35,6 +35,8 @@ def build_parser():
     ap.add_argument("--list-tasks", action="store_true", help="列出预置基础任务")
     ap.add_argument("--plan-only", action="store_true", help="只输出规划结果")
     ap.add_argument("--dry-run", action="store_true", help="感知 + 决策，但不执行动作")
+    ap.add_argument("--engine", default="v2", choices=["v1", "v2"],
+                    help="v2（默认，第6周）：复杂任务拆解 + 错误分类重试 + 实时监控 + 感知优化；v1：第4周闭环")
     ap.add_argument("--act", default="hybrid", choices=["hybrid", "llm", "rule", "vlm"])
     ap.add_argument("--vlm-url", default=None, help="--act vlm 时的 VLM 服务地址（默认 http://localhost:8765）")
     ap.add_argument("--vlm-ocr", action="store_true", help="--act vlm 时仍运行 OCR（默认不运行）")
@@ -49,6 +51,11 @@ def build_parser():
     ap.add_argument("--chat-app", default="模拟聊天", help="“发送消息”使用的聊天程序：模拟聊天（默认）/ 微信")
     ap.add_argument("--countdown", type=int, default=3, help="开始执行前的倒计时秒数")
     ap.add_argument("--run-dir", default=None, help="轨迹与截图保存目录（默认 runs/<时间>）")
+    ap.add_argument("--no-verify", action="store_true", help="v2：关闭截图前后对比的动作效果校验")
+    ap.add_argument("--no-roi", action="store_true", help="v2：OCR 识别整个屏幕（默认只识别前台窗口）")
+    ap.add_argument("--no-cache", action="store_true", help="v2：关闭 OCR 帧缓存与增量识别")
+    ap.add_argument("--preprocess", default=None, choices=["contrast", "upscale"], help="v2：OCR 前的图像预处理")
+    ap.add_argument("--budget", type=float, default=None, help="v2：单条指令的总时间预算（秒）")
     return ap
 
 
@@ -57,7 +64,10 @@ def make_config(args):
     cfg = AgentConfig(planner=args.planner, act_mode=args.act, use_llm=not args.no_llm, think=bool(args.think),
                       ocr_engine=args.ocr, dry_run=args.dry_run, step_retries=args.retries,
                       max_steps=args.max_steps, chat_app=args.chat_app, run_dir=args.run_dir,
-                      vlm_url=getattr(args, "vlm_url", None), vlm_ocr=bool(getattr(args, "vlm_ocr", False)))
+                      vlm_url=getattr(args, "vlm_url", None), vlm_ocr=bool(getattr(args, "vlm_ocr", False)),
+                      engine=getattr(args, "engine", "v2"), verify_effect=not getattr(args, "no_verify", False),
+                      roi=not getattr(args, "no_roi", False), ocr_cache=not getattr(args, "no_cache", False),
+                      preprocess=getattr(args, "preprocess", None), budget_sec=getattr(args, "budget", None))
     if args.model:
         cfg.model = args.model
     if args.ollama_url:
@@ -65,12 +75,17 @@ def make_config(args):
     return cfg
 
 
-def resolve_task(task_id: str):
+def _all_tasks():
     from agent.basic_tasks import build_tasks
-    for t in build_tasks():
+    from agent.complex_tasks import build_complex_tasks
+    return build_tasks() + build_complex_tasks()
+
+
+def resolve_task(task_id: str):
+    for t in _all_tasks():
         if t.id.upper() == str(task_id).upper():
             return t
-    raise SystemExit(f"没有预置任务 {task_id}，可用：" + ", ".join(t.id for t in build_tasks()))
+    raise SystemExit(f"没有预置任务 {task_id}，可用：" + ", ".join(t.id for t in _all_tasks()))
 
 
 def plan_only(args, instruction: str) -> int:
@@ -87,6 +102,24 @@ def plan_only(args, instruction: str) -> int:
     planner = HybridPlanner(mode=args.planner if llm_plan else "rule",
                             rule=RulePlanner(chat_app=args.chat_app, app_resolver=AppManager().resolve_app),
                             llm_plan=llm_plan)
+    if getattr(args, "engine", "v2") == "v2":
+        from agent.decomposer import Decomposer
+        try:
+            g = Decomposer(planner.rule, llm_plan=llm_plan, mode=planner.mode).decompose(instruction)
+        except Exception as e:
+            print(f"[规划] 失败: {e}")
+            return 2
+        print(f"[规划] 来源={g.source}，{len(g.goals)} 个目标")
+        n = 0
+        for goal in g.goals:
+            extra = "" if goal.idempotent else "（不可重放）"
+            print(f"  {goal.id} {goal.description}{extra}")
+            for s in goal.subtasks:
+                n += 1
+                print(f"     {n}. {s}")
+            for c in goal.postconditions:
+                print(f"     ✔ 完成检查：{c.describe()}")
+        return 0
     try:
         p = planner.plan(instruction)
     except Exception as e:
@@ -101,8 +134,7 @@ def plan_only(args, instruction: str) -> int:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.list_tasks:
-        from agent.basic_tasks import build_tasks
-        for t in build_tasks():
+        for t in _all_tasks():
             print(f"{t.id}  {t.name:<8}  指令：{t.instruction}")
         return 0
 
@@ -116,10 +148,12 @@ def main(argv=None) -> int:
 
     from agent.factory import build_agent
     agent, comp = build_agent(make_config(args))
-    print(f"GUI Agent v1.0  决策={agent.act_mode}  规划={agent.planner.mode}  "
+    print(f"GUI Agent {'v2.0' if getattr(agent, 'ENGINE', 'v1') == 'v2' else 'v1.0'}  决策={agent.act_mode}  规划={agent.planner.mode}  "
           f"LLM={'无' if comp['brain'] is None else comp['brain'].llm.inner.model_name}  "
           f"{'（dry-run：不执行动作）' if args.dry_run else ''}")
     print(f"轨迹目录: {comp['run_dir']}")
+    if getattr(agent, "ENGINE", "v1") == "v2":
+        print(f"实时查看执行状态（另开一个 Anaconda Prompt）：python -m agent.monitor {comp['run_dir']}")
 
     def run_one(text, checker=None):
         if args.countdown > 0 and not args.dry_run:

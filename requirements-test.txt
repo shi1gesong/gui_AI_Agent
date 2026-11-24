@@ -3,3 +3,4 @@ pytest>=8
 langchain-core
 requests
 # Linux 下跑 Xvfb 真实 GUI 用例还需要系统包：xvfb、xclip、python3-tk
+python-xlib; sys_platform == "linux"   # 第6周 Xvfb 弹窗用例读取真实 X 窗口
