@@ -13,8 +13,15 @@
 - 目标坐标恰好落在屏幕四角像素时向内偏移 1 像素，避免程序自己触发 FAILSAFE
   （用户手动把鼠标甩到角落时 FAILSAFE 仍然有效）
 - press_key / hotkey 校验按键名，未知按键名报 ValueError（pyautogui 原本会静默忽略）
+
+2026-11-24 修复（Windows 真机测试）：
+- Windows 下 type_text 默认统一走剪贴板粘贴。中文输入法处于中文模式时，typewrite 逐个按下的英文字母
+  会被输入法截获（真机上出现过 "Hello GUI Agent" 变成 "HelloGUI Agent"、输入变成 "Y" 等）。
+  可用 MouseKeyboardController(prefer_clipboard=False) 恢复逐字敲键盘的方式。
 """
+import sys
 import time
+from typing import Optional
 
 import pyautogui
 
@@ -27,8 +34,12 @@ CLIPBOARD_SETTLE_SEC = 0.15
 
 
 class MouseKeyboardController:
-    def __init__(self):
+    def __init__(self, prefer_clipboard: Optional[bool] = None):
+        """prefer_clipboard: 是否所有文本都用剪贴板粘贴输入。None 表示 Windows 上为 True、其他系统为 False"""
         self.screen_width, self.screen_height = pyautogui.size()
+        if prefer_clipboard is None:
+            prefer_clipboard = sys.platform.startswith("win")
+        self.prefer_clipboard = prefer_clipboard
 
     # ---------- 坐标与按键校验 ----------
     def _safe_point(self, x: int, y: int):
@@ -78,8 +89,9 @@ class MouseKeyboardController:
 
     # ---------- 键盘操作 ----------
     def type_text(self, text: str, interval: float = 0.02):
-        """输入文本，interval控制打字速度。含非 ASCII 字符（中文等）时自动改用剪贴板输入。"""
-        if not text.isascii():
+        """输入文本，interval控制打字速度（仅逐字输入时有效）。
+        含非 ASCII 字符（中文等）或 prefer_clipboard=True 时改用剪贴板粘贴。"""
+        if self.prefer_clipboard or not text.isascii():
             self.type_text_unicode(text)
             return
         pyautogui.typewrite(text, interval=interval)

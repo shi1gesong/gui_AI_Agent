@@ -1,14 +1,20 @@
 """Windows 真机用例（real_device 标记，默认跳过）
 
-会真实操作鼠标键盘！运行前请关闭所有记事本窗口，运行期间不要动鼠标：
+会真实操作鼠标键盘！运行期间不要动鼠标、不要切换窗口（Anaconda Prompt / cmd）：
     set GUI_AGENT_REAL_DEVICE=1
-    pytest -m real_device -v
-用记事本作为测试目标，通过 Ctrl+A / Ctrl+C 读回剪贴板来验证输入、拖拽选中、滚动等结果。
-注意：该文件在 Linux 云端环境无法执行，提交时未经真机验证，首次运行请留意结果。
+    pytest -m real_device -v -s
+
+用记事本作为测试目标。每个用例用一个独立的临时 txt 文件打开记事本（窗口标题唯一），
+输入后按 Ctrl+S 保存，再直接读文件内容来校验；结束时保存并关闭这个标签页。
+这样做的原因（2026-11-24 首次真机运行暴露的问题）：
+- Win11 新版记事本会恢复上次未保存的标签页，之前用 taskkill 强杀后，前一个用例的文字会被带到下一个用例
+- 用 Ctrl+A/Ctrl+C 读剪贴板校验时，复制偶尔没生效会读到旧剪贴板内容
+现在不再强杀记事本，不会影响你自己打开的记事本窗口。
 """
 import subprocess
 import sys
 import time
+import uuid
 
 import pytest
 
@@ -17,31 +23,46 @@ pytestmark = [pytest.mark.real_device,
 
 
 @pytest.fixture
-def notepad():
+def notepad(tmp_path):
     import pyautogui
-    import pyperclip
     from control.mouse_keyboard import MouseKeyboardController
 
-    proc = subprocess.Popen(["notepad.exe"])
-    time.sleep(2.0)
-    wins = [w for w in pyautogui.getWindowsWithTitle("记事本") + pyautogui.getWindowsWithTitle("Notepad")]
-    assert wins, "未找到记事本窗口"
-    win = wins[0]
-    win.activate()
-    time.sleep(0.5)
+    name = f"gui_agent_test_{uuid.uuid4().hex[:8]}"
+    path = tmp_path / f"{name}.txt"
+    path.write_text("", encoding="utf-8-sig")  # 带 BOM，保证旧版记事本也按 UTF-8 保存
+    subprocess.Popen(["notepad.exe", str(path)])
+
+    win = None
+    for _ in range(60):
+        wins = pyautogui.getWindowsWithTitle(name)
+        if wins:
+            win = wins[0]
+            break
+        time.sleep(0.25)
+    assert win is not None, f"15 秒内没有找到标题含 {name} 的记事本窗口"
+    try:
+        win.activate()
+    except Exception:
+        pass  # pygetwindow 在部分系统上 activate 会误报错误，下面的点击同样能聚焦
+    time.sleep(1.0)
     ctl = MouseKeyboardController()
-    cx, cy = win.left + win.width // 2, win.top + win.height // 2
-    ctl.click(cx, cy)
+    ctl.click(win.left + win.width // 2, win.top + win.height // 2)  # 点击编辑区获取焦点
+    time.sleep(0.3)
 
     def read_text():
-        ctl.hotkey("ctrl", "a")
-        ctl.hotkey("ctrl", "c")
-        time.sleep(0.3)
-        return pyperclip.paste().replace("\r\n", "\n")
+        ctl.hotkey("ctrl", "s")
+        time.sleep(1.0)
+        return path.read_text(encoding="utf-8-sig").replace("\r\n", "\n")
 
     yield ctl, win, read_text
-    subprocess.run(["taskkill", "/IM", "notepad.exe", "/F"], capture_output=True)
-    proc.kill()
+
+    ctl.hotkey("ctrl", "s")
+    time.sleep(0.5)
+    ctl.hotkey("ctrl", "w")  # Win11 记事本：关闭当前标签页（文件已保存，不会弹窗）
+    time.sleep(0.8)
+    if pyautogui.getWindowsWithTitle(name):  # 旧版记事本没有标签页，Ctrl+W 无效
+        ctl.hotkey("alt", "f4")
+        time.sleep(0.5)
 
 
 @pytest.mark.functional
@@ -104,9 +125,12 @@ def test_device_scroll_changes_view(notepad, tmp_path):
     from perception.screenshot import ScreenCapture
     ctl, win, read = notepad
     ctl.type_text_unicode("\n".join(f"第{i}行" for i in range(200)))
+    assert read().count("\n") == 199  # 先确认 200 行真的写进去了
     ctl.hotkey("ctrl", "home")
+    time.sleep(0.5)
     cap = ScreenCapture(save_dir=str(tmp_path))
-    region = (win.left + 10, win.top + 80, 300, 300)
+    # 截编辑区中部（避开 Win11 记事本顶部的标签栏和菜单栏）
+    region = (win.left + 20, win.top + win.height // 3, 300, 300)
     before = cap.capture_region(*region, save=False)
     ctl.scroll(-10, x=win.left + win.width // 2, y=win.top + win.height // 2)
     time.sleep(0.5)

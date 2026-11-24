@@ -11,7 +11,8 @@ from control.mouse_keyboard import MouseKeyboardController
 
 @pytest.fixture
 def ctl(fake_gui):
-    return MouseKeyboardController()
+    # 显式关闭“统一走剪贴板”，使逐字输入相关用例在 Windows 和 Linux 上行为一致
+    return MouseKeyboardController(prefer_clipboard=False)
 
 
 @pytest.mark.functional
@@ -105,6 +106,17 @@ class TestControlFunctional:
         ctl.type_text("搜索天气")
         assert fake_clipboard.history[0] == "搜索天气"
         assert "typewrite" not in fake_gui.names()
+
+    def test_prefer_clipboard_routes_ascii_to_clipboard(self, fake_gui, fake_clipboard):
+        """Windows 中文输入法会截获逐字敲入的英文字母，prefer_clipboard=True 时英文也走粘贴"""
+        c = MouseKeyboardController(prefer_clipboard=True)
+        c.type_text("Hello GUI Agent")
+        assert fake_clipboard.history[0] == "Hello GUI Agent" and "typewrite" not in fake_gui.names()
+
+    @pytest.mark.parametrize("platform,expected", [("win32", True), ("linux", False), ("darwin", False)])
+    def test_prefer_clipboard_default_by_platform(self, fake_gui, monkeypatch, platform, expected):
+        monkeypatch.setattr(mk.sys, "platform", platform)
+        assert MouseKeyboardController().prefer_clipboard is expected
 
     def test_type_text_ascii_does_not_touch_clipboard(self, ctl, fake_gui, fake_clipboard):
         ctl.type_text("hello")
