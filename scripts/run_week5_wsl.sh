@@ -7,6 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # 默认直连 huggingface.co；在国内网络下可先 export HF_ENDPOINT=https://hf-mirror.com 再运行本脚本
+export PYTHONUNBUFFERED=1   # 经过 tee 管道时 Python 默认整块缓冲，训练进度会很久不显示
 MODEL="${MODEL:-Qwen/Qwen2-VL-2B-Instruct}"
 OUT=outputs
 LOGS=$OUT/week5_logs
