@@ -88,7 +88,12 @@ except Exception:  # 未安装 / 无显示器
 try:
     import cv2  # noqa: F401  ocr_detector 顶部 import 了 cv2（实际未使用）
 except Exception:
-    sys.modules["cv2"] = types.ModuleType("cv2")
+    # 替身必须带 __spec__：transformers 导入时会 importlib.util.find_spec("cv2")，
+    # __spec__ 为 None 会抛 ValueError（2026-11-24 WSL 无 opencv 环境跑 -m gpu 时 9 个用例 setup 报错）
+    import importlib.machinery
+    _cv2 = types.ModuleType("cv2")
+    _cv2.__spec__ = importlib.machinery.ModuleSpec("cv2", None)
+    sys.modules["cv2"] = _cv2
 
 try:
     import langchain_core  # noqa: F401
