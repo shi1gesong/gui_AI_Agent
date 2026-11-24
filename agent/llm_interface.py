@@ -57,9 +57,18 @@ class OllamaAPIInterface(BaseLLMInterface):
     """
     DEFAULT_URL = "http://localhost:11434"
 
-    def __init__(self, model_name: str = "qwen3:8b", base_url: Optional[str] = None):
+    def __init__(self, model_name: str = "qwen3:8b", base_url: Optional[str] = None,
+                 think: Optional[bool] = None, temperature: Optional[float] = None, timeout: float = 120):
+        """
+        think: qwen3 等推理模型是否输出思考过程。None 表示不传（沿用 Ollama 默认）；
+               False 可以大幅减少每步耗时（第4周 CLI 默认关闭，需 Ollama ≥ 0.9）
+        temperature: 采样温度，None 表示不传；设为 0 时同一屏幕输出更稳定
+        """
         self.model_name = model_name
         self.base_url = self._resolve_base_url(base_url)
+        self.think = think
+        self.temperature = temperature
+        self.timeout = timeout
 
     @classmethod
     def _resolve_base_url(cls, base_url: Optional[str]) -> str:
@@ -86,8 +95,12 @@ class OllamaAPIInterface(BaseLLMInterface):
             with open(image_path, "rb") as f:
                 img_b64 = base64.b64encode(f.read()).decode("utf-8")
             payload["images"] = [img_b64]
+        if self.think is not None:
+            payload["think"] = bool(self.think)
+        if self.temperature is not None:
+            payload["options"] = {"temperature": float(self.temperature)}
 
-        resp = requests.post(f"{self.base_url}/api/generate", json=payload, timeout=120)
+        resp = requests.post(f"{self.base_url}/api/generate", json=payload, timeout=self.timeout)
         resp.raise_for_status()
         return resp.json().get("response", "")
 

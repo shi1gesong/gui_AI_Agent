@@ -25,7 +25,7 @@ WEEK3_REFLECT = {"is_complete": True, "reason": "已在浏览器中执行了搜�
 
 # 第3周 demo 对应的黄金期望（屏幕上只有『搜索』『设置』，没有浏览器图标）
 WEEK3_CASE1 = {"id": "W3-1", "subtask": "打开默认浏览器", "screen": ["搜索", "设置"],
-               "expect_type": ["key", "click"], "expect_target": ["浏览器", "Google Chrome", "Edge"],
+               "expect_type": ["key", "click", "open_app"], "expect_target": ["浏览器", "Google Chrome", "Edge"],
                "expect_input_any": ["win", "Win", "super"]}
 WEEK3_CASE2 = {"id": "W3-2", "subtask": "在浏览器的地址栏输入'天气预报'并按下回车键", "screen": ["搜索", "设置"],
                "expect_type": ["type"], "expect_input": "天气预报"}

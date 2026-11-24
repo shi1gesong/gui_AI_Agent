@@ -3,3 +3,5 @@ __pycache__/
 .pytest_cache/
 screenshots/
 data_cache/
+runs/
+report/week4_results/*/runs/

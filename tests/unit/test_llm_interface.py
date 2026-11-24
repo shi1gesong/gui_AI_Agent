@@ -217,7 +217,7 @@ class TestLLMException:
 
     def test_factory_unknown_kwarg(self):
         with pytest.raises(TypeError):
-            build_llm_interface("api", temperature=0.1)
+            build_llm_interface("api", top_k=5)  # 第4周起 temperature/think 是合法参数
 
     def test_base_interface_is_abstract(self):
         with pytest.raises(TypeError):

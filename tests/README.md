@@ -1,6 +1,6 @@
 # 测试套件说明
 
-覆盖第2周（感知 + 控制）与第3周（数据集、LLM 接口、Agent 框架）全部模块。
+覆盖第2周（感知 + 控制）、第3周（数据集、LLM 接口、Agent 框架）与第4周（端到端闭环 v1.0）全部模块。
 每个用例恰好属于一个类别：`functional` 功能 / `boundary` 边界 / `exception` 异常 / `multi_resolution` 多分辨率，
 收集阶段会自动检查；运行结束时终端会打印“类别 × 结果”“模块 × 结果”“运行环境 × 结果”三张统计表。
 
@@ -10,8 +10,10 @@
 tests/
   conftest.py              全局配置：依赖桩、Xvfb 虚拟屏幕、类别检查、统计输出
   fakes.py                 pyautogui / mss / 剪贴板 / LLM 替身
+  sim_desktop.py           第4周：内存中的模拟桌面（窗口/界面/截图/OCR/鼠标键盘），跑 5 个基础任务
   semantic_eval.py         Acting 阶段语义评测器
   data/semantic_cases.json 20 条 Acting 语义黄金用例
+  data/week4_semantic_cases.json 12 条第4周扩展动作空间语义用例
   unit/                    mock 用例（任何机器都能跑，不动鼠标、不需要模型）
   gui/                     Xvfb 虚拟屏幕上的真实截图与真实鼠标键盘事件（Linux 自动启用）
   real/                    需要真机/真实服务的用例（默认跳过）
@@ -44,6 +46,15 @@ pytest -m llm -v
 # 6) 真实 OCR 引擎
 set GUI_AGENT_REAL_OCR=1
 pytest -m ocr_real -v
+
+# 7) 第4周：Windows 真机 5 个基础任务 / 真实 qwen3:8b
+set GUI_AGENT_REAL_DEVICE=1
+pytest tests\real\test_real_week4.py -m real_device -v -s
+set OLLAMA_BASE_URL=http://localhost:11434
+pytest tests\real\test_real_week4.py -m llm -v
+
+# 8) 第4周：Xvfb 虚拟屏幕 + 真实 EasyOCR 端到端（Linux，需 pip install easyocr 与中文字体）
+GUI_AGENT_REAL_OCR=1 pytest tests/gui/test_xvfb_e2e.py
 
 # 导出每个用例的结果为 CSV
 GUI_AGENT_RESULTS_CSV=results.csv pytest
